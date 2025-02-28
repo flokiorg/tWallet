@@ -73,7 +73,9 @@ func (h *Header) updates() {
 
 		select {
 		case <-h.notifSubscription:
-			h.updateBalance(h.load.Wallet.Balance())
+			balance := h.load.Wallet.Balance()
+			h.updateBalance(balance)
+			h.load.Logger.Trace().Msgf("notif received (header), new balance: %v", balance)
 
 		case <-h.destroy:
 			return

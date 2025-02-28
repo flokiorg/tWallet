@@ -6,6 +6,7 @@ package load
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -13,9 +14,11 @@ import (
 	wlt "github.com/flokiorg/walletd/wallet"
 	"github.com/flokiorg/walletd/walletmgr"
 	"github.com/gdamore/tcell/v2"
+	"github.com/rs/zerolog"
 
 	"github.com/rivo/tview"
 
+	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
 )
 
@@ -48,16 +51,20 @@ type Load struct {
 	Wallet Wallet
 	Notif  *notification
 	tm     *tryManager
+	Logger zerolog.Logger
 }
 
 func NewLoad(appInfo *AppInfo, wallet Wallet, tapp *tview.Application, pages *tview.Pages) *Load {
+	logger := shared.CreateFileLogger(filepath.Join(appInfo.Config.WalletDir, "tWallet.log"))
+
 	l := &Load{
 		AppInfo:     appInfo,
 		Application: tapp,
 		Nav:         NewNavigator(tapp, pages),
 		Wallet:      wallet,
-		Notif:       newNotification(wallet),
+		Notif:       newNotification(wallet, logger),
 		tm:          newTryManager(),
+		Logger:      logger,
 	}
 
 	l.Application.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -97,10 +104,11 @@ type notification struct {
 	healthToast chan string
 	toast       chan string
 
-	mu   sync.Mutex
-	subs []chan struct{}
-	stop chan struct{}
-	wg   sync.WaitGroup
+	mu     sync.Mutex
+	subs   []chan struct{}
+	stop   chan struct{}
+	wg     sync.WaitGroup
+	logger zerolog.Logger
 }
 
 func (n *notification) Subscribe() <-chan struct{} {
@@ -112,12 +120,13 @@ func (n *notification) Subscribe() <-chan struct{} {
 	return ch
 }
 
-func newNotification(wallet Wallet) *notification {
+func newNotification(wallet Wallet, logger zerolog.Logger) *notification {
 	n := &notification{
 		healthToast: make(chan string, 5),
 		toast:       make(chan string, 5),
 		subs:        make([]chan struct{}, 0),
 		stop:        make(chan struct{}),
+		logger:      logger,
 	}
 
 	n.accountNotif, n.txNotif, n.spentNessNotif, n.healthNotif = wallet.Watch()
@@ -143,9 +152,13 @@ func (n *notification) listen() {
 
 	for {
 		select {
-		case <-n.accountNotif:
-		case <-n.txNotif:
-		case <-n.spentNessNotif:
+		case nd := <-n.accountNotif:
+			n.logger.Trace().Msgf("notif received (notification), accountNotif: %#v", nd)
+		case nd := <-n.txNotif:
+			n.logger.Trace().Msgf("notif received (notification), txNotif: %#v", nd)
+		case nd := <-n.spentNessNotif:
+			n.logger.Trace().Msgf("notif received (notification), spentNessNotif: %#v", nd)
+
 		case <-n.stop:
 			return
 		}

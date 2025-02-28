@@ -105,8 +105,8 @@ func (w *Wallet) showChangePasswordForm() {
 }
 
 func (w *Wallet) validateChangePasswordFields(pass, passConf string) error {
-	if len(pass) <= shared.MinPasswordLength {
-		return errors.New(fmt.Sprintf("New password must be at least %d characters!", shared.MinPasswordLength))
+	if len(pass) < shared.MinPasswordLength {
+		return fmt.Errorf("New password must be at least %d characters!", shared.MinPasswordLength)
 	}
 
 	if pass != passConf {

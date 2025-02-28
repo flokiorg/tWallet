@@ -5,7 +5,6 @@
 package onboard
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -287,15 +286,15 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 
 func (p *Onboard) validateFields(walletName, pass, passConf string) error {
 	if len(walletName) <= shared.MinWalletNameLength {
-		return errors.New(fmt.Sprintf("Wallet name must be at least %d characters!", shared.MinWalletNameLength))
+		return fmt.Errorf("Wallet name must be at least %d characters!", shared.MinWalletNameLength)
 	}
 
 	if pass != passConf {
-		return errors.New("Passwords do not match!")
+		return fmt.Errorf("Passwords do not match!")
 	}
 
-	if len(pass) <= shared.MinPasswordLength {
-		return errors.New(fmt.Sprintf("Password must be at least %d characters!", shared.MinPasswordLength))
+	if len(pass) < shared.MinPasswordLength {
+		return fmt.Errorf("Password must be at least %d characters!", shared.MinPasswordLength)
 	}
 
 	return nil

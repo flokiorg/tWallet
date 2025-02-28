@@ -28,7 +28,7 @@ type feeOption struct {
 }
 
 var (
-	feeOptions = []feeOption{{" Free ", 0}, {" Slow: 2 sat/vb ", 2}, {" Medium: 2 sat/vb ", 2}, {" Fast: 3 sat/vb ", 3}}
+	feeOptions = []feeOption{{" Free ", 0}, {" Slow: 2 loki/vb ", 2}, {" Medium: 2 loki/vb ", 2}, {" Fast: 3 loki/vb ", 3}}
 )
 
 type sendViewModel struct {
@@ -36,6 +36,7 @@ type sendViewModel struct {
 	address            chainutil.Address
 	isSending          bool
 	totalCost          float64
+	lastErr            error
 }
 
 type Wallet struct {
@@ -148,7 +149,9 @@ func (w *Wallet) showTransfertView() {
 
 			if w.svCache == nil || w.svCache.totalCost <= 0 {
 				var errMsg string
-				if !w.load.Wallet.IsSynced() {
+				if w.svCache != nil && w.svCache.lastErr != nil {
+					errMsg = w.svCache.lastErr.Error()
+				} else if !w.load.Wallet.IsSynced() {
 					errMsg = "blockchain RPC is inactive"
 				} else {
 					errMsg = fmt.Sprintf("invalid amount: total:%v", w.svCache.totalCost)
@@ -358,6 +361,7 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 	defer func() {
 		if err != nil {
 			w.svCache.totalCost = 0
+			w.svCache.lastErr = err
 			totalCostField.SetText(fmt.Sprintf("[gray::]%.2f", w.svCache.totalCost))
 			newBalanceField.SetText(fmt.Sprintf("[gray::]%s", w.currentStrBalance()))
 		}
@@ -444,6 +448,7 @@ func (w *Wallet) listenNewTransactions() {
 	for {
 		select {
 		case <-w.notifSubscription:
+			w.load.Logger.Trace().Msgf("notif received (wallet), got new transactions")
 			w.updateRows()
 
 		case <-w.destroy:
