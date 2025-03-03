@@ -58,9 +58,17 @@ func NewFooter(l *load.Load) *Footer {
 }
 
 func (f *Footer) updates() {
+
+	notifSubscription := f.load.Notif.Subscribe()
+
 	for {
 		select {
 
+		case nd := <-notifSubscription:
+			if nd.TxNotif != nil && len(nd.TxNotif.AttachedBlocks) > 0 {
+				b := nd.TxNotif.AttachedBlocks[0]
+				f.updateStatusText(fmt.Sprintf("Height: %d", b.Height))
+			}
 		case text := <-f.load.Notif.Toast():
 			f.updateInfoText(text)
 

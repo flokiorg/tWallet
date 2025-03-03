@@ -19,11 +19,10 @@ import (
 
 type Header struct {
 	*tview.Flex
-	logo              *tview.TextView
-	balance           *tview.TextView
-	load              *load.Load
-	destroy           chan struct{}
-	notifSubscription <-chan struct{}
+	logo    *tview.TextView
+	balance *tview.TextView
+	load    *load.Load
+	destroy chan struct{}
 }
 
 func NewHeader(l *load.Load) *Header {
@@ -67,12 +66,12 @@ func NewHeader(l *load.Load) *Header {
 
 func (h *Header) updates() {
 
-	h.notifSubscription = h.load.Notif.Subscribe()
+	notifSubscription := h.load.Notif.Subscribe()
 
 	for {
 
 		select {
-		case <-h.notifSubscription:
+		case <-notifSubscription:
 			balance := h.load.Wallet.Balance()
 			h.updateBalance(balance)
 			h.load.Logger.Trace().Msgf("notif received (header), new balance: %v", balance)

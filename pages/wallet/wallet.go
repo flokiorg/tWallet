@@ -48,7 +48,7 @@ type Wallet struct {
 
 	svCache           *sendViewModel
 	destroy           chan struct{}
-	notifSubscription <-chan struct{}
+	notifSubscription <-chan *load.NotificationEvent
 }
 
 func NewPage(l *load.Load) *Wallet {
@@ -210,7 +210,7 @@ func (w *Wallet) showTransfertView() {
 						}
 						txhash := tx.TxHash().String()
 						w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("✅ Transaction Sent! Waiting for confirmation… (%s_%s)", txhash[:5], txhash[len(txhash)-5:]), time.Second*60)
-						w.load.Notif.BroadcastWalletUpdate()
+						w.load.Notif.BroadcastWalletUpdate(&load.NotificationEvent{})
 						w.svCache = &sendViewModel{}
 						w.nav.CloseModal()
 					}()

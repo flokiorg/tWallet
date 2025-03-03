@@ -105,17 +105,23 @@ type notification struct {
 	toast       chan string
 
 	mu     sync.Mutex
-	subs   []chan struct{}
+	subs   []chan *NotificationEvent
 	stop   chan struct{}
 	wg     sync.WaitGroup
 	logger zerolog.Logger
 }
 
-func (n *notification) Subscribe() <-chan struct{} {
+type NotificationEvent struct {
+	AccountNotif   *wlt.AccountNotification
+	TxNotif        *wlt.TransactionNotifications
+	SpentNessNotif *wlt.SpentnessNotifications
+}
+
+func (n *notification) Subscribe() <-chan *NotificationEvent {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	ch := make(chan struct{}, 1)
+	ch := make(chan *NotificationEvent, 1)
 	n.subs = append(n.subs, ch)
 	return ch
 }
@@ -124,7 +130,7 @@ func newNotification(wallet Wallet, logger zerolog.Logger) *notification {
 	n := &notification{
 		healthToast: make(chan string, 5),
 		toast:       make(chan string, 5),
-		subs:        make([]chan struct{}, 0),
+		subs:        make([]chan *NotificationEvent, 0),
 		stop:        make(chan struct{}),
 		logger:      logger,
 	}
@@ -136,13 +142,13 @@ func newNotification(wallet Wallet, logger zerolog.Logger) *notification {
 	return n
 }
 
-func (n *notification) BroadcastWalletUpdate() {
+func (n *notification) BroadcastWalletUpdate(event *NotificationEvent) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	for _, ch := range n.subs {
 		select {
-		case ch <- struct{}{}:
+		case ch <- event:
 		default:
 		}
 	}
@@ -151,19 +157,23 @@ func (n *notification) BroadcastWalletUpdate() {
 func (n *notification) listen() {
 
 	for {
+		nevent := &NotificationEvent{}
 		select {
 		case nd := <-n.accountNotif:
+			nevent.AccountNotif = nd
 			n.logger.Trace().Msgf("notif received (notification), accountNotif: %#v", nd)
 		case nd := <-n.txNotif:
+			nevent.TxNotif = nd
 			n.logger.Trace().Msgf("notif received (notification), txNotif: %#v", nd)
 		case nd := <-n.spentNessNotif:
+			nevent.SpentNessNotif = nd
 			n.logger.Trace().Msgf("notif received (notification), spentNessNotif: %#v", nd)
 
 		case <-n.stop:
 			return
 		}
 
-		n.BroadcastWalletUpdate()
+		n.BroadcastWalletUpdate(nevent)
 	}
 }
 
