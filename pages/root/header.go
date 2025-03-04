@@ -93,6 +93,7 @@ func (h *Header) updateBalance(balance float64) {
 }
 
 func (h *Header) buildLogo() *tview.TextView {
+
 	logo := tview.NewTextView().SetDynamicColors(true)
 	logo.SetBorder(false)
 
@@ -113,5 +114,8 @@ func (h *Header) buildLogo() *tview.TextView {
 		fmt.Fprintf(logo, "   [%s::b]%s", "", lines[i])
 		fmt.Fprintf(logo, "\n")
 	}
+
+	version := "\t\tv0.1.0-alpha"
+	fmt.Fprint(logo, version)
 	return logo
 }

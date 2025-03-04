@@ -55,7 +55,7 @@ type Load struct {
 }
 
 func NewLoad(appInfo *AppInfo, wallet Wallet, tapp *tview.Application, pages *tview.Pages) *Load {
-	logger := shared.CreateFileLogger(filepath.Join(appInfo.Config.WalletDir, "tWallet.log"))
+	logger := shared.CreateFileLogger(filepath.Join(appInfo.Config.WalletDir, "twallet.log"))
 
 	l := &Load{
 		AppInfo:     appInfo,
