@@ -14,6 +14,7 @@ import (
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
+	"github.com/flokiorg/twallet/utils"
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -115,7 +116,7 @@ func (h *Header) buildLogo() *tview.TextView {
 		fmt.Fprintf(logo, "\n")
 	}
 
-	version := "\t\tv0.1.0-alpha"
+	version := fmt.Sprintf("\tv%s", utils.Version)
 	fmt.Fprint(logo, version)
 	return logo
 }
