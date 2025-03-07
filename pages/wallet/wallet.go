@@ -209,6 +209,9 @@ func (w *Wallet) showTransfertView() {
 							return
 						}
 						txhash := tx.TxHash().String()
+						w.load.Logger.Info().
+							Str("tx_hash", txhash).
+							Msg("Transaction sent, waiting for confirmation")
 						w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("✅ Transaction Sent! Waiting for confirmation… (%s_%s)", txhash[:5], txhash[len(txhash)-5:]), time.Second*60)
 						w.load.Notif.BroadcastWalletUpdate(&load.NotificationEvent{})
 						w.svCache = &sendViewModel{}
@@ -223,7 +226,7 @@ func (w *Wallet) showTransfertView() {
 			cView.AddItem(recap, 9, 1, false).
 				AddItem(cForm, 0, 1, true)
 
-			w.nav.ShowModal(components.NewModal(cView, 50, 22))
+			w.nav.ShowModal(components.NewModal(cView, 50, 22, w.nav.CloseModal))
 
 		})
 
@@ -235,7 +238,7 @@ func (w *Wallet) showTransfertView() {
 
 	view.AddItem(form, 0, 1, true)
 
-	w.nav.ShowModal(components.NewModal(view, 50, 22))
+	w.nav.ShowModal(components.NewModal(view, 50, 22, w.nav.CloseModal))
 }
 
 func (w *Wallet) showReceiveView() {
@@ -308,7 +311,7 @@ func (w *Wallet) showReceiveView() {
 		AddItem(qrText, 20, 1, false).
 		AddItem(buttons, 5, 1, true)
 
-	w.nav.ShowModal(components.NewModal(view, 50, 32))
+	w.nav.ShowModal(components.NewModal(view, 50, 32, w.nav.CloseModal))
 }
 
 func (w *Wallet) validateTransferFields(strAddress string, strAmount string) (chainutil.Address, float64, error) {
@@ -346,6 +349,8 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 	if form.GetFormItemCount() < 6 {
 		return
 	}
+
+	w.load.Notif.CancelToast()
 
 	addressField := form.GetFormItem(0).(*tview.TextArea)
 	amountField := form.GetFormItem(1).(*tview.InputField)
@@ -448,7 +453,6 @@ func (w *Wallet) listenNewTransactions() {
 	for {
 		select {
 		case <-w.notifSubscription:
-			w.load.Logger.Trace().Msgf("notif received (wallet), got new transactions")
 			w.updateRows()
 
 		case <-w.destroy:

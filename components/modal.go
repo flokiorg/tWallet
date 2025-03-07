@@ -14,7 +14,7 @@ type Dialog struct {
 	*tview.Modal
 }
 
-func NewModal(p tview.Primitive, width, height int) tview.Primitive {
+func NewModal(p tview.Primitive, width, height int, escFunc func()) tview.Primitive {
 
 	view := tview.NewFlex().SetDirection(tview.FlexRow)
 	view.AddItem(nil, 0, 1, false).
@@ -27,10 +27,18 @@ func NewModal(p tview.Primitive, width, height int) tview.Primitive {
 		AddItem(view, width, 1, true).
 		AddItem(nil, 0, 1, false)
 
+	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if escFunc != nil && event.Key() == tcell.KeyESC {
+			escFunc()
+		}
+
+		return event
+	})
+
 	return modal
 }
 
-func NewDialog(title, text string, closeFunc func(), buttons []string, funcs ...func()) *Dialog {
+func NewDialog(title, text string, escFunc func(), buttons []string, funcs ...func()) *Dialog {
 
 	modal := tview.NewModal()
 	modal.SetTitle(title)
@@ -38,10 +46,10 @@ func NewDialog(title, text string, closeFunc func(), buttons []string, funcs ...
 	modal.SetBackgroundColor(tcell.ColorDefault)
 	modal.Box.SetBackgroundColor(tcell.ColorDefault)
 	modal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if closeFunc == nil || event.Key() != tcell.KeyESC {
-			return event
+		if escFunc != nil && event.Key() == tcell.KeyESC {
+			escFunc()
 		}
-		closeFunc()
+
 		return event
 	})
 
@@ -82,7 +90,7 @@ func Toast(text string) tview.Primitive {
 		SetTextColor(tcell.ColorWhite).
 		SetTextAlign(tview.AlignCenter)
 
-	return NewModal(t, 50, 3)
+	return NewModal(t, 50, 3, nil)
 }
 
 // func (a *App) showDialog(title, text string, textColor tcell.Color, buttons []string, funcs ...func()) {

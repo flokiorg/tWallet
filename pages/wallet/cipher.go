@@ -16,45 +16,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-func (w *Wallet) showCipherCard() {
-
-	form := tview.NewForm().
-		AddPasswordField("Passphrase:", "", 0, '*', nil).
-		AddButton("Cancel", w.closeModal).
-		AddButton("OK", func() {
-
-			// w.load.Wallet.RestoreByHex()
-
-			closeButton := tview.NewFlex().
-				AddItem(nil, 0, 1, false).
-				AddItem(components.NewConfirmButton(w.nav.Application, "Close", true, tcell.ColorDefault, 1, w.nav.CloseModal), 0, 1, true).
-				AddItem(nil, 0, 1, false)
-
-			cipherCard, height, _ := components.NewCipher(w.load, []string{
-				"unsupported",
-			}, "unsupported")
-
-			grid := tview.NewGrid().
-				SetRows(0, height, 1, 0).
-				SetColumns(0, 50, 0).
-				SetBorders(false).
-				AddItem(cipherCard, 1, 1, 1, 1, 0, 0, false).
-				AddItem(closeButton, 2, 1, 1, 1, 0, 0, true)
-
-			w.nav.ShowModal(grid) // 33=>26 12=>19 24=>23
-		})
-
-	lockerView := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(tview.NewTextView().SetText(" Please enter your spending passphrase. "), 1, 1, false).
-		AddItem(form, 0, 1, true)
-
-	lockerView.SetTitle("🔒 Restricted Access").SetTitleColor(tcell.ColorGray).SetBackgroundColor(tcell.ColorOrange).SetBorder(true).SetBorderPadding(1, 1, 1, 1)
-
-	w.nav.ShowModal(components.NewModal(lockerView, 50, 10))
-
-}
-
 func (w *Wallet) showChangePasswordForm() {
 
 	w.load.Notif.CancelToast()
@@ -100,17 +61,17 @@ func (w *Wallet) showChangePasswordForm() {
 		SetBackgroundColor(tcell.ColorOrange).
 		SetBorder(true)
 
-	w.nav.ShowModal(components.NewModal(view, 50, 18))
+	w.nav.ShowModal(components.NewModal(view, 50, 18, w.nav.CloseModal))
 
 }
 
 func (w *Wallet) validateChangePasswordFields(pass, passConf string) error {
 	if len(pass) < shared.MinPasswordLength {
-		return fmt.Errorf("New password must be at least %d characters!", shared.MinPasswordLength)
+		return fmt.Errorf("new password must be at least %d characters", shared.MinPasswordLength)
 	}
 
 	if pass != passConf {
-		return errors.New("Passwords do not match!")
+		return errors.New("passwords do not match")
 	}
 
 	return nil

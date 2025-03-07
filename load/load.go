@@ -29,7 +29,8 @@ type AppConfig struct {
 	DBTimeout      time.Duration `short:"t" long:"timeout" description:"Timeout duration (in seconds) for database connections."`
 	ElectrumServer string        `short:"e" long:"electserver" description:"Electrum server host:port"`
 	ConfigFile     string        `short:"c" long:"config" description:"Path to configuration file"`
-	AccountID      uint32        `short:"a" description:"Account ID"`
+	AccountID      uint32        `short:"a" description:"Wallet account ID"`
+	Version        bool          `short:"v" description:"Print version"`
 }
 
 type AppInfo struct {
@@ -55,6 +56,7 @@ type Load struct {
 }
 
 func NewLoad(appInfo *AppInfo, wallet Wallet, tapp *tview.Application, pages *tview.Pages) *Load {
+
 	logger := shared.CreateFileLogger(filepath.Join(appInfo.Config.WalletDir, "twallet.log"))
 
 	l := &Load{
@@ -72,7 +74,6 @@ func NewLoad(appInfo *AppInfo, wallet Wallet, tapp *tview.Application, pages *tv
 			return event
 		}
 		l.Notif.CancelToast()
-		l.Nav.CloseModal()
 		l.Application.SetFocus(l.Nav.pages)
 		return event
 	})
@@ -81,6 +82,7 @@ func NewLoad(appInfo *AppInfo, wallet Wallet, tapp *tview.Application, pages *tv
 }
 
 func (l *Load) StartSync() {
+	l.Logger.Trace().Msg("Starting wallet synchronization")
 	if err := l.Wallet.Synchronize(); err != nil {
 		l.Restart()
 	}
@@ -88,10 +90,21 @@ func (l *Load) StartSync() {
 
 func (l *Load) Restart() {
 	l.tm.try(func() error {
+		l.Logger.Trace().Msg("Electrum service restart initiated")
+
 		l.Notif.healthToast <- "Restarting..."
 		l.Notif.healthNotif <- electrum.NerrHealthRestarting
-		time.Sleep(time.Second * 2)
-		return l.Wallet.Synchronize()
+
+		time.Sleep(time.Second * 2) // Simulating delay
+
+		err := l.Wallet.Synchronize()
+		if err != nil {
+			l.Logger.Error().Err(err).Msg("Electrum service restart failed during synchronization")
+		} else {
+			l.Logger.Trace().Msg("Electrum service restart completed successfully")
+		}
+
+		return err
 	}, l.Notif)
 }
 
@@ -107,7 +120,6 @@ type notification struct {
 	mu     sync.Mutex
 	subs   []chan *NotificationEvent
 	stop   chan struct{}
-	wg     sync.WaitGroup
 	logger zerolog.Logger
 }
 
@@ -161,13 +173,16 @@ func (n *notification) listen() {
 		select {
 		case nd := <-n.accountNotif:
 			nevent.AccountNotif = nd
-			n.logger.Trace().Msgf("notif received (notification), accountNotif: %#v", nd)
+			n.logger.Trace().
+				Uint32("account_number", nd.AccountNumber).
+				Msg("Received account notification")
 		case nd := <-n.txNotif:
 			nevent.TxNotif = nd
-			n.logger.Trace().Msgf("notif received (notification), txNotif: %#v", nd)
 		case nd := <-n.spentNessNotif:
 			nevent.SpentNessNotif = nd
-			n.logger.Trace().Msgf("notif received (notification), spentNessNotif: %#v", nd)
+			n.logger.Trace().
+				Str("tx_hash", nd.Hash().String()).
+				Msg("Received SpentNess notification")
 
 		case <-n.stop:
 			return

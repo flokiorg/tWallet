@@ -75,8 +75,10 @@ func (h *Header) updates() {
 		case <-notifSubscription:
 			balance := h.load.Wallet.Balance()
 			h.updateBalance(balance)
-			h.load.Logger.Trace().Msgf("notif received (header), new balance: %v", balance)
-
+			h.load.Logger.Trace().
+				Str("event", "header_notification").
+				Float64("new_balance", balance).
+				Msg("Received header notification")
 		case <-h.destroy:
 			return
 		}
@@ -116,7 +118,7 @@ func (h *Header) buildLogo() *tview.TextView {
 		fmt.Fprintf(logo, "\n")
 	}
 
-	version := fmt.Sprintf("\tv%s", utils.Version)
+	version := fmt.Sprintf("\t v%s", utils.Version)
 	fmt.Fprint(logo, version)
 	return logo
 }

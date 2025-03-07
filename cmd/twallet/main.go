@@ -52,6 +52,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if cfg.Version {
+		fmt.Println("Version:", utils.Version)
+		return
+	}
+
 	defaultConfigPath, err := utils.GetFullPath(defaultConfigFilename)
 	if err != nil {
 		exitWithError("unexpected error", err)
@@ -113,6 +118,10 @@ func main() {
 	wallet := walletmgr.NewWalletService(params)
 	if err := wallet.OpenWallet(); err != nil && !errors.Is(err, walletmgr.ErrWalletNotfound) {
 		log.Fatal().Err(err).Msgf("unable to open existing wallet")
+	}
+
+	if err = os.MkdirAll(cfg.WalletDir, 0755); err != nil {
+		log.Fatal().Err(err).Msgf("Failed to create wallet directory: %s", cfg.WalletDir)
 	}
 
 	appInfo := load.NewAppInfo(&cfg, params)

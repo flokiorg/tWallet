@@ -111,7 +111,7 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 				return
 			}
 
-			p.showToast("restoring...")
+			p.showToast("⚡ restoring...")
 			go func() {
 
 				var err error
@@ -139,7 +139,7 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 						phex, words, err = p.load.Wallet.RestoreByMnemonic(input, walletName, pass)
 
 					default:
-						err = fmt.Errorf("invalid seed length, got: %d expected %d,%d or %d !", len(words), W12, W18, W24)
+						err = fmt.Errorf("invalid seed length, got: %d expected %d,%d or %d", len(words), W12, W18, W24)
 						return
 					}
 
@@ -203,9 +203,9 @@ func (p *Onboard) buildNewWalletForm() tview.Primitive {
 
 	form := tview.NewForm()
 	form.AddDropDown("Word seed type: ", []string{" 12-word seed ", " 18-word seed ", " 24-word seed "}, 0, nil).
-		AddInputField("Wallet name: ", "", 0, nil, nil).
-		AddPasswordField("Spending passphrase: ", "", 0, '*', nil).
-		AddPasswordField("Confirm passphrase: ", "", 0, '*', nil).
+		AddInputField("Wallet name: ", "test", 0, nil, nil).
+		AddPasswordField("Spending passphrase: ", "toor01", 0, '*', nil).
+		AddPasswordField("Confirm passphrase: ", "toor01", 0, '*', nil).
 		AddButton("Continue", func() {
 			slIndex, _ := form.GetFormItem(0).(*tview.DropDown).GetCurrentOption()
 			walletName := form.GetFormItem(1).(*tview.InputField).GetText()
@@ -228,7 +228,7 @@ func (p *Onboard) buildNewWalletForm() tview.Primitive {
 
 			}
 
-			p.showToast("creating...")
+			p.showToast("⚡ creating...")
 			go func() {
 				phex, words, err := p.load.Wallet.Create(uint8(seedLen), walletName, pass)
 				p.load.QueueUpdateDraw(func() {
@@ -263,9 +263,16 @@ func (p *Onboard) buildNewWalletForm() tview.Primitive {
 func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive, error) {
 
 	confirmButton := components.NewConfirmButton(p.load.Application, "I have written down all words", true, tcell.ColorBlack, 3, func() {
-		layout := root.NewLayout(p.load, wallet.NewPage(p.load))
-		go p.load.StartSync()
-		p.nav.NavigateTo(layout)
+		p.pages.HidePage(CipherView)
+		cancel := func() {
+			p.nav.CloseModal()
+			p.pages.SwitchToPage(CipherView)
+		}
+		p.nav.ShowModal(components.NewDialog("confirm?", "Your mnemonic is NOT saved in the database and CANNOT be restored. Make sure to save it securely.", cancel, []string{"Cancel", "Risk Accepted"}, cancel, func() {
+			layout := root.NewLayout(p.load, wallet.NewPage(p.load))
+			go p.load.StartSync()
+			p.nav.NavigateTo(layout)
+		}))
 	})
 	cipherCard, height, err := components.NewCipher(p.load, words, phex)
 	if err != nil {
@@ -273,7 +280,6 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 	}
 
 	// be sure to store your seed phrase backup in a secure location
-
 	grid := tview.NewGrid().
 		SetRows(0, height, 1, 3, 0).
 		SetColumns(0, 50, 0).
@@ -281,20 +287,25 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 		AddItem(cipherCard, 1, 1, 1, 1, 0, 0, true).
 		AddItem(confirmButton, 3, 1, 1, 1, 0, 0, false)
 
-	return grid, nil
+	container := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(tview.NewBox(), 0, 1, false).
+		AddItem(grid, height+5, 0, true).
+		AddItem(tview.NewBox(), 0, 1, false)
+	return container, nil
 }
 
 func (p *Onboard) validateFields(walletName, pass, passConf string) error {
 	if len(walletName) <= shared.MinWalletNameLength {
-		return fmt.Errorf("Wallet name must be at least %d characters!", shared.MinWalletNameLength)
+		return fmt.Errorf("wallet name must be at least %d characters", shared.MinWalletNameLength)
 	}
 
 	if pass != passConf {
-		return fmt.Errorf("Passwords do not match!")
+		return fmt.Errorf("passwords do not match")
 	}
 
 	if len(pass) < shared.MinPasswordLength {
-		return fmt.Errorf("Password must be at least %d characters!", shared.MinPasswordLength)
+		return fmt.Errorf("password must be at least %d characters", shared.MinPasswordLength)
 	}
 
 	return nil
