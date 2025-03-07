@@ -203,9 +203,9 @@ func (p *Onboard) buildNewWalletForm() tview.Primitive {
 
 	form := tview.NewForm()
 	form.AddDropDown("Word seed type: ", []string{" 12-word seed ", " 18-word seed ", " 24-word seed "}, 0, nil).
-		AddInputField("Wallet name: ", "test", 0, nil, nil).
-		AddPasswordField("Spending passphrase: ", "toor01", 0, '*', nil).
-		AddPasswordField("Confirm passphrase: ", "toor01", 0, '*', nil).
+		AddInputField("Wallet name: ", "", 0, nil, nil).
+		AddPasswordField("Spending passphrase: ", "", 0, '*', nil).
+		AddPasswordField("Confirm passphrase: ", "", 0, '*', nil).
 		AddButton("Continue", func() {
 			slIndex, _ := form.GetFormItem(0).(*tview.DropDown).GetCurrentOption()
 			walletName := form.GetFormItem(1).(*tview.InputField).GetText()
