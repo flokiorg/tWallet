@@ -253,6 +253,8 @@ func (w *Wallet) showReceiveView() {
 
 	strAddress := address.String()
 
+	w.load.Logger.Trace().Str("address", strAddress).Msg("address requested")
+
 	qr, err := qrcode.New(strAddress, qrcode.Highest)
 	if err != nil {
 		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
@@ -413,6 +415,10 @@ func (w *Wallet) closeModal() {
 }
 
 func (w *Wallet) fetchTransactionsRows() [][]string {
+
+	if !w.load.Wallet.IsOpened() {
+		return nil
+	}
 
 	result, err := w.load.Wallet.FetchTransactions()
 	if err != nil {

@@ -59,26 +59,24 @@ func NewFooter(l *load.Load) *Footer {
 
 func (f *Footer) updates() {
 
-	notifSubscription := f.load.Notif.Subscribe()
-
 	for {
 		select {
 
-		case nd := <-notifSubscription:
-			if nd.TxNotif != nil && len(nd.TxNotif.AttachedBlocks) > 0 {
-				b := nd.TxNotif.AttachedBlocks[0]
-				f.updateStatusText(fmt.Sprintf("Height: %d", b.Height))
-			}
 		case text := <-f.load.Notif.Toast():
 			f.updateInfoText(text)
 
 		case text := <-f.load.Notif.ElectrumToast():
-			f.updateStatusText(text)
+			if len(text) > 0 {
+				f.updateStatusText(text)
+			} else {
+				f.updateHeight()
+			}
 
 		case err := <-f.load.Notif.ElectrumHealth():
 
 			if errors.Is(err, electrum.NerrHealthPong) {
 				f.updateStatus(components.GREEN)
+				f.updateHeight()
 			} else if errors.Is(err, electrum.NerrHealthRestarting) {
 				f.updateStatus(components.YELLOW)
 			} else {
@@ -91,6 +89,13 @@ func (f *Footer) updates() {
 			return
 		}
 
+	}
+}
+
+func (f *Footer) updateHeight() {
+	height, _, err := f.load.Wallet.CurrentBlock()
+	if err == nil {
+		f.updateStatusText(fmt.Sprintf("Height: %d", height))
 	}
 }
 

@@ -169,7 +169,9 @@ func (n *notification) BroadcastWalletUpdate(event *NotificationEvent) {
 func (n *notification) listen() {
 
 	for {
+
 		nevent := &NotificationEvent{}
+
 		select {
 		case nd := <-n.accountNotif:
 			nevent.AccountNotif = nd
@@ -178,12 +180,15 @@ func (n *notification) listen() {
 				Msg("Received account notification")
 		case nd := <-n.txNotif:
 			nevent.TxNotif = nd
+			n.logger.Trace().
+				Int("attached_blocks", len(nd.AttachedBlocks)).
+				Int("detached_blocks", len(nd.DetachedBlocks)).
+				Msg("Received transaction notification")
 		case nd := <-n.spentNessNotif:
 			nevent.SpentNessNotif = nd
 			n.logger.Trace().
 				Str("tx_hash", nd.Hash().String()).
 				Msg("Received SpentNess notification")
-
 		case <-n.stop:
 			return
 		}

@@ -5,6 +5,7 @@
 package shared
 
 import (
+	"github.com/flokiorg/go-flokicoin/chaincfg/chainhash"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/go-flokicoin/wire"
 	"github.com/flokiorg/walletd/wallet"
@@ -61,4 +62,5 @@ type Wallet interface {
 	FetchTransactions() ([]walletmgr.TransactionServiceResult, error)
 	Recover(chan<- uint32) error
 	DestroyWallet()
+	CurrentBlock() (int32, *chainhash.Hash, error)
 }
