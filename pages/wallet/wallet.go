@@ -152,7 +152,7 @@ func (w *Wallet) showTransfertView() {
 				if w.svCache != nil && w.svCache.lastErr != nil {
 					errMsg = w.svCache.lastErr.Error()
 				} else if !w.load.Wallet.IsSynced() {
-					errMsg = "blockchain RPC is inactive"
+					errMsg = "Electrum is disconnected"
 				} else {
 					errMsg = fmt.Sprintf("invalid amount: total:%v", w.svCache.totalCost)
 				}
