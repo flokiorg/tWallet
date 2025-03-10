@@ -66,17 +66,18 @@ func (f *Footer) updates() {
 			f.updateInfoText(text)
 
 		case text := <-f.load.Notif.ElectrumToast():
-			if len(text) > 0 {
-				f.updateStatusText(text)
-			} else {
-				f.updateHeight()
-			}
+			f.updateStatusText(text)
 
 		case err := <-f.load.Notif.ElectrumHealth():
 
 			if errors.Is(err, electrum.NerrHealthPong) {
-				f.updateStatus(components.GREEN)
-				f.updateHeight()
+				height := f.updateHeight()
+				if f.load.AppInfo.StartupBlock == nil || f.load.AppInfo.StartupBlock.Height > height {
+					f.updateStatus(components.BLUE)
+				} else {
+					f.updateStatus(components.GREEN)
+				}
+
 			} else if errors.Is(err, electrum.NerrHealthRestarting) {
 				f.updateStatus(components.YELLOW)
 			} else {
@@ -92,11 +93,14 @@ func (f *Footer) updates() {
 	}
 }
 
-func (f *Footer) updateHeight() {
-	height, _, err := f.load.Wallet.CurrentBlock()
+func (f *Footer) updateHeight() int32 {
+	block, err := f.load.Wallet.CurrentWalletBlock()
 	if err == nil {
-		f.updateStatusText(fmt.Sprintf("Height: %d", height))
+
+		f.updateStatusText(fmt.Sprintf("Height: %d", block.Height))
+		return block.Height
 	}
+	return 0
 }
 
 func (f *Footer) updateStatus(flagColor components.CircleColor) {

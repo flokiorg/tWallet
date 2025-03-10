@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flokiorg/walletd/chain/electrum"
+	"github.com/flokiorg/walletd/waddrmgr"
 	wlt "github.com/flokiorg/walletd/wallet"
 	"github.com/flokiorg/walletd/walletmgr"
 	"github.com/gdamore/tcell/v2"
@@ -34,8 +35,9 @@ type AppConfig struct {
 }
 
 type AppInfo struct {
-	Config *AppConfig
-	Params *walletmgr.WalletParams
+	Config       *AppConfig
+	Params       *walletmgr.WalletParams
+	StartupBlock *waddrmgr.BlockStamp
 }
 
 func NewAppInfo(cfg *AppConfig, params *walletmgr.WalletParams) *AppInfo {
@@ -83,9 +85,14 @@ func NewLoad(appInfo *AppInfo, wallet Wallet, tapp *tview.Application, pages *tv
 
 func (l *Load) StartSync() {
 	l.Logger.Trace().Msg("Starting wallet synchronization")
-	if err := l.Wallet.Synchronize(); err != nil {
+
+	bestBlock, err := l.Wallet.Synchronize()
+	if err != nil {
 		l.Restart()
+		return
 	}
+
+	l.AppInfo.StartupBlock = bestBlock
 }
 
 func (l *Load) Restart() {
@@ -97,10 +104,11 @@ func (l *Load) Restart() {
 
 		time.Sleep(time.Second * 2) // Simulating delay
 
-		err := l.Wallet.Synchronize()
+		bestBlock, err := l.Wallet.Synchronize()
 		if err != nil {
 			l.Logger.Error().Err(err).Msg("Electrum service restart failed during synchronization")
 		} else {
+			l.AppInfo.StartupBlock = bestBlock
 			l.Logger.Trace().Msg("Electrum service restart completed successfully")
 		}
 

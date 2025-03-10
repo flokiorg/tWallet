@@ -191,6 +191,7 @@ type CircleColor int
 const (
 	GREEN CircleColor = iota
 	YELLOW
+	BLUE
 	RED
 )
 
@@ -232,6 +233,8 @@ func (c *Circle) Draw(screen tcell.Screen) {
 		char = '🟢'
 	case YELLOW:
 		char = '🟡'
+	case BLUE:
+		char = '🔵'
 	case RED:
 		char = '🔴'
 	}

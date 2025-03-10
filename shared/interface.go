@@ -5,9 +5,9 @@
 package shared
 
 import (
-	"github.com/flokiorg/go-flokicoin/chaincfg/chainhash"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/go-flokicoin/wire"
+	"github.com/flokiorg/walletd/waddrmgr"
 	"github.com/flokiorg/walletd/wallet"
 	"github.com/flokiorg/walletd/walletmgr"
 )
@@ -51,7 +51,7 @@ type Wallet interface {
 
 	IsOpened() bool
 	IsSynced() bool
-	Synchronize() error
+	Synchronize() (*waddrmgr.BlockStamp, error)
 	Balance() float64
 	Watch() (<-chan *wallet.AccountNotification, <-chan *wallet.TransactionNotifications, <-chan *wallet.SpentnessNotifications, chan error)
 	ChangePrivatePassphrase(old, new []byte) error
@@ -60,7 +60,8 @@ type Wallet interface {
 	GetNextAddress() (chainutil.Address, error)
 	GetLastAddress() (chainutil.Address, error)
 	FetchTransactions() ([]walletmgr.TransactionServiceResult, error)
-	Recover(chan<- uint32) error
+	Recover(chan<- uint32) (*waddrmgr.BlockStamp, error)
 	DestroyWallet()
-	CurrentBlock() (int32, *chainhash.Hash, error)
+	CurrentWalletBlock() (*waddrmgr.BlockStamp, error)
+	CurrentBestBlock() (*waddrmgr.BlockStamp, error)
 }

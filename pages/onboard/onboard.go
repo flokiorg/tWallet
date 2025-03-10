@@ -168,7 +168,7 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 						}
 					}
 				}()
-				err = p.load.Wallet.Recover(counter)
+				_, err = p.load.Wallet.Recover(counter)
 				close(recoveryDone)
 				if err != nil {
 					p.load.Wallet.DestroyWallet()
