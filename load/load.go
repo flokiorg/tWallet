@@ -37,7 +37,24 @@ type AppConfig struct {
 type AppInfo struct {
 	Config       *AppConfig
 	Params       *walletmgr.WalletParams
-	StartupBlock *waddrmgr.BlockStamp
+	startupBlock waddrmgr.BlockStamp
+	mu           sync.Mutex
+}
+
+func (a *AppInfo) SetStartupBlock(block waddrmgr.BlockStamp) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.startupBlock = block
+}
+
+func (a *AppInfo) GetStartupBlock() (waddrmgr.BlockStamp, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.startupBlock == (waddrmgr.BlockStamp{}) {
+		return waddrmgr.BlockStamp{}, false
+	}
+	return a.startupBlock, true
 }
 
 func NewAppInfo(cfg *AppConfig, params *walletmgr.WalletParams) *AppInfo {
@@ -92,7 +109,7 @@ func (l *Load) StartSync() {
 		return
 	}
 
-	l.AppInfo.StartupBlock = bestBlock
+	l.AppInfo.SetStartupBlock(*bestBlock)
 }
 
 func (l *Load) Restart() {
@@ -102,17 +119,16 @@ func (l *Load) Restart() {
 		l.Notif.healthToast <- "Restarting..."
 		l.Notif.healthNotif <- electrum.NerrHealthRestarting
 
-		time.Sleep(time.Second * 2) // Simulating delay
+		time.Sleep(time.Second * 2) // pause
 
 		bestBlock, err := l.Wallet.Synchronize()
 		if err != nil {
 			l.Logger.Error().Err(err).Msg("Electrum service restart failed during synchronization")
-		} else {
-			l.AppInfo.StartupBlock = bestBlock
-			l.Logger.Trace().Msg("Electrum service restart completed successfully")
+			return err
 		}
 
-		return err
+		l.AppInfo.SetStartupBlock(*bestBlock)
+		return nil
 	}, l.Notif)
 }
 
@@ -183,20 +199,10 @@ func (n *notification) listen() {
 		select {
 		case nd := <-n.accountNotif:
 			nevent.AccountNotif = nd
-			n.logger.Trace().
-				Uint32("account_number", nd.AccountNumber).
-				Msg("Received account notification")
 		case nd := <-n.txNotif:
 			nevent.TxNotif = nd
-			n.logger.Trace().
-				Int("attached_blocks", len(nd.AttachedBlocks)).
-				Int("detached_blocks", len(nd.DetachedBlocks)).
-				Msg("Received transaction notification")
 		case nd := <-n.spentNessNotif:
 			nevent.SpentNessNotif = nd
-			n.logger.Trace().
-				Str("tx_hash", nd.Hash().String()).
-				Msg("Received SpentNess notification")
 		case <-n.stop:
 			return
 		}

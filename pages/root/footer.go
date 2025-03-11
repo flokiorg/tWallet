@@ -71,12 +71,8 @@ func (f *Footer) updates() {
 		case err := <-f.load.Notif.ElectrumHealth():
 
 			if errors.Is(err, electrum.NerrHealthPong) {
-				height := f.updateHeight()
-				if f.load.AppInfo.StartupBlock == nil || f.load.AppInfo.StartupBlock.Height > height {
-					f.updateStatus(components.BLUE)
-				} else {
-					f.updateStatus(components.GREEN)
-				}
+				f.updateStatus(components.GREEN)
+				f.updateHeight()
 
 			} else if errors.Is(err, electrum.NerrHealthRestarting) {
 				f.updateStatus(components.YELLOW)
@@ -93,14 +89,20 @@ func (f *Footer) updates() {
 	}
 }
 
-func (f *Footer) updateHeight() int32 {
-	block, err := f.load.Wallet.CurrentWalletBlock()
-	if err == nil {
+func (f *Footer) updateHeight() {
 
-		f.updateStatusText(fmt.Sprintf("Height: %d", block.Height))
-		return block.Height
+	block, err := f.load.Wallet.CurrentWalletBlock()
+	var height int32
+	if err == nil {
+		height = block.Height
 	}
-	return 0
+
+	bestBlock, exists := f.load.AppInfo.GetStartupBlock()
+	if !exists || bestBlock.Height > height {
+		f.updateStatusText("Syncing...")
+	} else {
+		f.updateStatusText(fmt.Sprintf("Height: %d", height))
+	}
 }
 
 func (f *Footer) updateStatus(flagColor components.CircleColor) {
