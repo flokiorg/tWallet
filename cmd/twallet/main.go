@@ -18,6 +18,7 @@ import (
 	"github.com/flokiorg/walletd/waddrmgr"
 	"github.com/flokiorg/walletd/walletdb/bdb"
 	"github.com/jessevdk/go-flags"
+	bolterr "go.etcd.io/bbolt/errors"
 
 	"github.com/flokiorg/walletd/walletmgr"
 	"github.com/flokiorg/walletd/walletseed/bip39"
@@ -116,8 +117,13 @@ func main() {
 	bip39.SetWordList(defaultWordList)
 
 	wallet := walletmgr.NewWalletService(params)
-	if err := wallet.OpenWallet(); err != nil && !errors.Is(err, walletmgr.ErrWalletNotfound) {
-		log.Fatal().Err(err).Msgf("unable to open existing wallet")
+
+	if err := wallet.OpenWallet(); err != nil {
+		if errors.Is(err, bolterr.ErrTimeout) {
+			log.Fatal().Msgf("timeout occurred: the wallet may already be opened by another process")
+		} else if !errors.Is(err, walletmgr.ErrWalletNotfound) {
+			log.Fatal().Err(err).Msgf("unable to open existing wallet")
+		}
 	}
 
 	if err = os.MkdirAll(cfg.WalletDir, 0755); err != nil {
