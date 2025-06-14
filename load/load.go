@@ -173,7 +173,12 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 		n.reportHealth(HealthState{Level: HealthOrange, Info: "no wallet"})
 
 	case flnwallet.StatusSyncing:
-		info := fmt.Sprintf("syncing... (%d)", ev.BlockHeight)
+		var info string
+		if ev.BlockHeight == 0 {
+			info = "syncing..."
+		} else {
+			info = fmt.Sprintf("syncing... (%d)", ev.BlockHeight)
+		}
 		n.reportHealth(HealthState{Level: HealthOrange, Info: info})
 
 	case flnwallet.StatusUnlocked:
@@ -199,7 +204,7 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 		n.logger.Debug().Msgf("new sync block: %v", ev.BlockHeight)
 		percent := float64(ev.BlockHeight) / float64(ev.SyncedHeight) * 100
 		info := fmt.Sprintf("Scanning... %d (%.0f%%)", ev.SyncedHeight, percent)
-		n.reportHealth(HealthState{Level: HealthOrange, Info: info})
+		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
 	}
 }
 
