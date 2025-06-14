@@ -10,13 +10,17 @@ import (
 	"strings"
 
 	"github.com/atotto/clipboard"
+	"github.com/flokiorg/go-flokicoin/chaincfg"
+	"github.com/flokiorg/go-flokicoin/chainutil"
+	"github.com/flokiorg/go-flokicoin/wire"
+	"github.com/gdamore/tcell/v2"
 )
 
 const (
 	flcSign = "𝔽"
 )
 
-func FormatAmountView(value float64, precision int) string {
+func FormatAmountView(value chainutil.Amount, precision int) string {
 	// Check if the value is negative
 	isNegative := value < 0
 	if isNegative {
@@ -24,7 +28,7 @@ func FormatAmountView(value float64, precision int) string {
 	}
 
 	// Format the number with the specified precision
-	formatted := fmt.Sprintf("%.*f", precision, value)
+	formatted := fmt.Sprintf("%.*f", precision, value.ToFLC())
 
 	// Split into integer and decimal parts
 	parts := strings.Split(formatted, ".")
@@ -70,4 +74,26 @@ func ClipboardCopy(text string) error {
 		return fmt.Errorf("clipboard copy failed: %w", err)
 	}
 	return nil
+}
+
+func NetworkColor(network chaincfg.Params) tcell.Color {
+	var logoColor tcell.Color
+
+	switch network.Net {
+	case wire.MainNet:
+		logoColor = tcell.ColorOrange
+	case wire.TestNet3:
+		logoColor = tcell.ColorRed
+	default:
+		logoColor = tcell.ColorYellowGreen
+	}
+
+	return logoColor
+}
+
+func CleanupQRtext(qrtxt string) string {
+	txt := strings.TrimLeft(qrtxt, "\n\t\r ")
+	txt = strings.TrimRight(txt, "\n\t\r")
+
+	return "\t" + txt
 }

@@ -5,18 +5,22 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
+	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/load"
-	page "github.com/flokiorg/twallet/pages"
-	. "github.com/flokiorg/twallet/shared"
+	"github.com/flokiorg/twallet/load/config"
+	"github.com/flokiorg/twallet/pages"
+	"github.com/flokiorg/twallet/utils"
 )
 
 const (
-	splashScreenDelay = time.Second * 2
+	splashScreenDelay = time.Second * 1
 )
 
 func init() {
@@ -44,29 +48,75 @@ func init() {
 
 type App struct {
 	*tview.Application
-	pages *tview.Pages
-	load  *load.Load
+	pages    *tview.Pages
+	cfg      *config.AppConfig
+	flnsvc   *flnwallet.Service
+	bootText chan<- string
 }
 
-func NewApp(appInfo *load.AppInfo, wallet Wallet) *App {
+func NewApp(cfg *config.AppConfig) *App {
 	app := &App{
 		Application: tview.NewApplication(),
 		pages:       tview.NewPages(),
+		cfg:         cfg,
 	}
 
-	app.load = load.NewLoad(appInfo, wallet, app.Application, app.pages)
 	app.EnablePaste(true).EnableMouse(true)
 
-	app.pages.AddPage("splashscreen", page.SplashScreen(), true, true).
-		AddPage("reloading", page.ReloadingScreen(), true, false)
+	bootText, splashscreen := pages.SplashScreen(app.Application)
+	app.pages.AddPage("splashscreen", splashscreen, true, true).
+		AddPage("reloading", pages.ReloadingScreen(), true, false)
 
 	app.SetRoot(app.pages, true).SetFocus(app.pages)
 
+	app.bootText = bootText
+	go app.init()
+
+	return app
+}
+
+func (app *App) init() {
+
+	defer close(app.bootText)
+	flnsvc := flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
+
+	sub := flnsvc.Subscribe()
+	defer flnsvc.Unsubscribe(sub)
+
+loop:
+	for u := range sub {
+		switch u.State {
+		case flnwallet.StatusNone, flnwallet.StatusInit:
+
+		case flnwallet.StatusDown:
+			select {
+			case app.bootText <- fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", utils.FormatBootError(u.Err)):
+			default:
+			}
+			continue
+
+		case flnwallet.StatusQuit:
+			app.Stop()
+			return
+
+		default:
+			break loop
+		}
+	}
+
+	app.flnsvc = flnsvc
+
 	time.AfterFunc(splashScreenDelay, func() {
 		app.QueueUpdateDraw(func() {
-			app.pages.AddAndSwitchToPage("main", page.NewEntrypoint(app.load), true)
+			loader := load.NewLoad(app.cfg, flnsvc, app.Application, app.pages)
+			app.pages.AddAndSwitchToPage("main", pages.NewEntrypoint(loader), true)
 		})
 	})
 
-	return app
+}
+
+func (app *App) Close() {
+	if app.flnsvc != nil {
+		app.flnsvc.Stop()
+	}
 }

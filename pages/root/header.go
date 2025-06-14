@@ -10,7 +10,9 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/go-flokicoin/wire"
+	"github.com/flokiorg/flnd/flnwallet"
+	"github.com/flokiorg/flnd/lnrpc"
+	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
@@ -36,10 +38,9 @@ func NewHeader(l *load.Load) *Header {
 	h.logo = h.buildLogo()
 	h.AddItem(h.logo, 0, 1, false)
 
-	if l.Wallet.IsOpened() {
+	if ok, _ := l.Wallet.WalletExists(); ok {
 
 		h.balance = tview.NewTextView().
-			SetText(fmt.Sprintf("Balance: [%s:-:b]%s", tcell.ColorGreen, shared.FormatAmountView(h.load.Wallet.Balance(), 6))).
 			SetDynamicColors(true).
 			SetTextColor(tcell.ColorOrange).
 			SetTextAlign(tview.AlignLeft)
@@ -48,13 +49,20 @@ func NewHeader(l *load.Load) *Header {
 			SetDynamicColors(true).
 			SetTextAlign(tview.AlignLeft)
 
-		fmt.Fprintf(hotkeys, "[%s:-:b]<s> [white:-:-]Send\n", tcell.ColorLightSkyBlue)
-		fmt.Fprintf(hotkeys, "[%s:-:b]<r> [white:-:-]Receive", tcell.ColorLightSkyBlue)
+		if ev := h.load.Wallet.GetLastEvent(); ev.State != flnwallet.StatusLocked {
+			balance, err := h.load.Wallet.Balance()
+			if err != nil {
+				l.Logger.Error().Err(err).Msg("unable to fetch balance")
+			}
+			h.balance.SetText(balanceView(balance))
+			fmt.Fprintf(hotkeys, "\n[%s:-:b]<s> [white:-:-]Send  ", tcell.ColorLightSkyBlue)
+			fmt.Fprintf(hotkeys, "[%s:-:b]<r> [white:-:-]Receive", tcell.ColorLightSkyBlue)
+		}
 
 		walletInfo := tview.NewGrid().
 			SetRows(1, 1, 1, 2).SetColumns(0)
 
-		walletInfo.AddItem(h.balance, 1, 0, 1, 1, 0, 0, false).
+		walletInfo.AddItem(h.balance, 1, 0, 2, 1, 0, 0, false).
 			AddItem(hotkeys, 3, 0, 1, 1, 0, 0, false)
 
 		h.AddItem(walletInfo, 30, 1, false)
@@ -73,12 +81,11 @@ func (h *Header) updates() {
 
 		select {
 		case <-notifSubscription:
-			balance := h.load.Wallet.Balance()
-			h.updateBalance(balance)
-			h.load.Logger.Trace().
-				Str("event", "header_notification").
-				Float64("new_balance", balance).
-				Msg("Received header notification")
+			balance, err := h.load.Wallet.Balance()
+			if err == nil {
+				h.updateBalance(balance)
+			}
+
 		case <-h.destroy:
 			return
 		}
@@ -89,9 +96,11 @@ func (h *Header) Destroy() {
 	close(h.destroy)
 }
 
-func (h *Header) updateBalance(balance float64) {
+func (h *Header) updateBalance(resp *lnrpc.WalletBalanceResponse) {
+	h.load.Logger.Debug().Msgf("new balance confirmed:%v unconfirmed:%v", resp.ConfirmedBalance, resp.UnconfirmedBalance)
+	h.load.Cache.SetBalance(resp)
 	h.load.Application.QueueUpdateDraw(func() {
-		h.balance.SetText(fmt.Sprintf("Balance: [%s:-:b]%s", tcell.ColorGreen, shared.FormatAmountView(balance, 6)))
+		h.balance.SetText(balanceView(resp))
 	})
 }
 
@@ -100,19 +109,10 @@ func (h *Header) buildLogo() *tview.TextView {
 	logo := tview.NewTextView().SetDynamicColors(true)
 	logo.SetBorder(false)
 
-	var logoColor tcell.Color
-
-	switch h.load.Params.Network.Net {
-	case wire.MainNet:
-		logoColor = tcell.ColorOrange
-	case wire.TestNet3:
-		logoColor = tcell.ColorRed
-	default:
-		logoColor = tcell.ColorYellowGreen
-	}
+	netColor := NetworkColor(*h.load.AppConfig.Network)
 
 	lines := strings.Split(LOGO_TEXT, "\n")
-	fmt.Fprintf(logo, "[%s:-:-]", logoColor)
+	fmt.Fprintf(logo, "[%s:-:-]", netColor)
 	for i := 1; i < len(lines); i++ {
 		fmt.Fprintf(logo, "   [%s::b]%s", "", lines[i])
 		fmt.Fprintf(logo, "\n")
@@ -121,4 +121,14 @@ func (h *Header) buildLogo() *tview.TextView {
 	version := fmt.Sprintf("\t v%s", utils.Version)
 	fmt.Fprint(logo, version)
 	return logo
+}
+
+func balanceView(balance *lnrpc.WalletBalanceResponse) string {
+	if balance == nil {
+		return fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, DefaultBalanceView)
+	}
+	strBalance := fmt.Sprintf("Balance: [%s:-:b]%s \n", tcell.ColorGreen, shared.FormatAmountView(chainutil.Amount(balance.ConfirmedBalance), 6))
+	strBalance += fmt.Sprintf("[-:-:-]Unconfirmed: [%s:-:b]%s\n", tcell.ColorGreen, shared.FormatAmountView(chainutil.Amount(balance.UnconfirmedBalance), 6))
+	// strBalance += fmt.Sprintf("[-:-:-]Locked: [%s:-:b]%s", tcell.ColorGreen, shared.FormatAmountView(chainutil.Amount(balance.LockedBalance), 6))
+	return strBalance
 }

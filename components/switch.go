@@ -7,9 +7,9 @@ package components
 import (
 	"log"
 
+	"github.com/flokiorg/twallet/load"
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/twallet/load"
 	"github.com/gdamore/tcell/v2"
 )
 

@@ -5,16 +5,18 @@
 package wallet
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/flokiorg/flnd/lnrpc"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/rivo/tview"
 
+	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
@@ -27,16 +29,12 @@ type feeOption struct {
 	amount chainutil.Amount
 }
 
-var (
-	feeOptions = []feeOption{{" Free ", 0}, {" Slow: 2 loki/vb ", 2}, {" Medium: 2 loki/vb ", 2}, {" Fast: 3 loki/vb ", 3}}
-)
-
 type sendViewModel struct {
-	amount, feePerByte chainutil.Amount
-	address            chainutil.Address
-	isSending          bool
-	totalCost          float64
-	lastErr            error
+	amount, totalCost, fee chainutil.Amount
+	address                chainutil.Address
+	isSending              bool
+	lastErr                error
+	lokiPerVbyte           uint64
 }
 
 type Wallet struct {
@@ -47,11 +45,12 @@ type Wallet struct {
 	mu sync.Mutex
 
 	svCache           *sendViewModel
-	destroy           chan struct{}
+	quit              chan struct{}
 	notifSubscription <-chan *load.NotificationEvent
+	busy              bool
 }
 
-func NewPage(l *load.Load) *Wallet {
+func NewPage(l *load.Load) tview.Primitive {
 
 	columns := []components.Column{
 		{
@@ -74,17 +73,20 @@ func NewPage(l *load.Load) *Wallet {
 		},
 	}
 
+	netColor := shared.NetworkColor(*l.AppConfig.Network)
+
 	w := &Wallet{
-		Table:   components.NewTable("Transactions", columns),
+		Table:   components.NewTable("Transactions", columns, netColor, flnwallet.MaxTransactionsLimit),
 		nav:     l.Nav,
 		load:    l,
 		svCache: &sendViewModel{},
+		quit:    make(chan struct{}),
 	}
 
 	w.SetBorder(true).
 		SetTitleAlign(tview.AlignCenter).
-		SetTitleColor(tcell.ColorOrange).
-		SetBorderColor(tcell.ColorOrange)
+		SetTitleColor(netColor).
+		SetBorderColor(netColor)
 
 	w.SetInputCapture(w.handleKeys)
 
@@ -95,7 +97,7 @@ func NewPage(l *load.Load) *Wallet {
 
 func (w *Wallet) handleKeys(event *tcell.EventKey) *tcell.EventKey {
 
-	if event.Key() != tcell.KeyRune {
+	if event.Key() != tcell.KeyRune || w.busy {
 		return event
 	}
 
@@ -105,28 +107,75 @@ func (w *Wallet) handleKeys(event *tcell.EventKey) *tcell.EventKey {
 	case 'r':
 		w.showReceiveView()
 	case 'c':
-		w.showChangePasswordForm()
-		// case 'b':
-		// 	w.showCipherCard()
+		w.changePassword()
+	case 'l':
+		w.lockWallet()
 	}
 
 	return event
 
 }
 
+func (w *Wallet) changePassword() {
+
+	w.nav.ShowModal(components.NewDialog(
+		"Confirm Action",
+		"To change your password, the wallet must first be locked. Do you want to proceed?",
+		w.nav.CloseModal,
+		[]string{"Cancel", "Yes"},
+		w.nav.CloseModal,
+		func() {
+			if w.busy {
+				return
+			}
+			w.busy = true
+			go func() {
+				w.load.Notif.ShowToast("🔒 locking...")
+				w.load.Wallet.Restart(context.Background())
+				w.load.Application.QueueUpdateDraw(func() {
+					w.load.Go(shared.CHANGE)
+					w.busy = false
+				})
+			}()
+		},
+	))
+
+}
+
+func (w *Wallet) lockWallet() {
+
+	w.nav.ShowModal(components.NewDialog(
+		"Confirm Action",
+		"Are you sure you want to lock the wallet?",
+		w.nav.CloseModal,
+		[]string{"Cancel", "Yes"},
+		w.nav.CloseModal,
+		func() {
+			if w.busy {
+				return
+			}
+			w.busy = true
+			go func() {
+				w.load.Notif.ShowToast("🔒 locking...")
+				w.load.Wallet.Restart(context.Background())
+				w.load.Application.QueueUpdateDraw(func() {
+					w.load.Go(shared.LOCK)
+					w.busy = false
+				})
+			}()
+		},
+	))
+}
+
 func (w *Wallet) showTransfertView() {
 
 	w.load.Notif.CancelToast()
 
-	feeOptionsTab := make([]string, 0, len(feeOptions))
-	for _, opt := range feeOptions {
-		feeOptionsTab = append(feeOptionsTab, opt.label)
-	}
 	form := tview.NewForm()
 	form.SetBackgroundColor(tcell.ColorDefault).SetBorderPadding(2, 2, 3, 3)
 	form.AddTextArea("Destination Address:", "", 0, 2, 0, func(text string) { w.transferAmountChanged(form) }).
 		AddInputField("Amount:", "", 0, nil, func(text string) { w.transferAmountChanged(form) }).
-		AddDropDown("Fee:", feeOptionsTab, 2, func(option string, optionIndex int) { w.transferAmountChanged(form) }).
+		AddTextView("Fee:", fmt.Sprintf("[gray::]%d", 0), 0, 1, true, false).
 		AddTextView("", "", 0, 1, true, false).
 		AddTextView("Available balance:", fmt.Sprintf("[gray::]%s", w.currentStrBalance()), 0, 1, true, false).
 		AddTextView("Total cost:", fmt.Sprintf("[gray::]%.2f", 0.0), 0, 1, true, false).
@@ -142,7 +191,7 @@ func (w *Wallet) showTransfertView() {
 
 			_, amount, err := w.validateTransferFields(addressField.GetText(), amountField.GetText())
 			if err != nil {
-				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 				w.load.Application.SetFocus(addressField)
 				return
 			}
@@ -151,12 +200,10 @@ func (w *Wallet) showTransfertView() {
 				var errMsg string
 				if w.svCache != nil && w.svCache.lastErr != nil {
 					errMsg = w.svCache.lastErr.Error()
-				} else if !w.load.Wallet.IsSynced() {
-					errMsg = "Electrum is disconnected"
 				} else {
 					errMsg = fmt.Sprintf("invalid amount: total:%v", w.svCache.totalCost)
 				}
-				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", errMsg), time.Second*30)
+				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", errMsg), time.Second*30)
 				w.load.Application.SetFocus(amountField)
 				return
 			}
@@ -168,15 +215,13 @@ func (w *Wallet) showTransfertView() {
 			fmt.Fprintf(recap, " Amount:\n [gray::]%s[-::]\n\n", shared.FormatAmountView(amount, 6))
 			recap.SetBackgroundColor(tcell.ColorDefault)
 
-			privPassField := tview.NewInputField().SetLabel("Spending passphrase:").SetMaskCharacter('*')
-
 			cForm := tview.NewForm()
 			cForm.SetBackgroundColor(tcell.ColorDefault).SetBorderPadding(0, 2, 3, 3)
 
 			cForm.AddTextView("Available balance:", fmt.Sprintf("[gray::]%s", w.currentStrBalance()), 0, 1, true, false).
+				AddTextView("Fee:", fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.fee, 6)), 0, 1, true, false).
 				AddTextView("Total cost:", totalCostField.GetText(false), 0, 1, true, false).
 				AddTextView("Balance After send:", newBalanceField.GetText(false), 0, 1, true, false).
-				AddFormItem(privPassField).
 				AddButton("Cancel", w.closeModal).
 				AddButton("Send", func() {
 
@@ -195,20 +240,11 @@ func (w *Wallet) showTransfertView() {
 
 						w.load.Notif.ShowToastWithTimeout("⚡ sending...", time.Second*60)
 
-						privPass := privPassField.GetText()
-						if len(privPass) <= shared.MinPasswordLength {
-							w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", "Incorrect passphrase length"), time.Second*30)
-							w.load.Application.SetFocus(privPassField)
-							return
-						}
-
-						tx, err := w.load.Wallet.SimpleTransfer([]byte(privPass), w.svCache.address, w.svCache.amount, w.svCache.feePerByte)
+						txhash, err := w.load.Wallet.Transfer(w.svCache.address, w.svCache.amount, w.svCache.lokiPerVbyte)
 						if err != nil {
 							w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
-							w.load.Application.SetFocus(privPassField)
 							return
 						}
-						txhash := tx.TxHash().String()
 						w.load.Logger.Info().
 							Str("tx_hash", txhash).
 							Msg("Transaction sent, waiting for confirmation")
@@ -245,7 +281,7 @@ func (w *Wallet) showReceiveView() {
 
 	w.load.Notif.CancelToast()
 
-	address, err := w.load.Wallet.GetLastAddress()
+	address, err := w.load.Wallet.GetNextAddress(w.load.AppConfig.UnusedAddressType)
 	if err != nil {
 		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
 		return
@@ -266,9 +302,10 @@ func (w *Wallet) showReceiveView() {
 		SetText(fmt.Sprintf("[gray::-]Address:[-:-:-] \n%s", strAddress))
 	label.SetBackgroundColor(tcell.ColorDefault).SetBorderPadding(1, 2, 2, 2)
 
+	qrtxt := shared.CleanupQRtext(qr.ToSmallString(true))
 	qrText := tview.NewTextView()
 	qrText.SetBackgroundColor(tcell.ColorDefault)
-	qrText.SetText(qr.ToSmallString(false)).
+	qrText.SetText(qrtxt).
 		SetTextAlign(tview.AlignCenter)
 
 	cpyBtn := components.NewConfirmButton(w.nav.Application, "copy", true, tcell.ColorDefault, 3, func() {
@@ -279,7 +316,7 @@ func (w *Wallet) showReceiveView() {
 	})
 	nextAddrBtn := components.NewConfirmButton(w.nav.Application, "Next Address", true, tcell.ColorDefault, 3, func() {
 		w.load.Notif.CancelToast()
-		address, err := w.load.Wallet.GetNextAddress()
+		address, err := w.load.Wallet.GetNextAddress(w.load.AppConfig.UsedAddressType)
 		if err != nil {
 			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
 			return
@@ -292,8 +329,9 @@ func (w *Wallet) showReceiveView() {
 		}
 		go func() {
 			w.load.Application.QueueUpdateDraw(func() {
+				qrtxt := shared.CleanupQRtext(qr.ToSmallString(true))
 				label.SetText(fmt.Sprintf("[gray::-]Address:[-:-:-] \n%s", strAddress))
-				qrText.SetText(qr.ToSmallString(false))
+				qrText.SetText(qrtxt)
 			})
 		}()
 	})
@@ -309,16 +347,16 @@ func (w *Wallet) showReceiveView() {
 		SetBackgroundColor(tcell.ColorOrange).
 		SetBorder(true)
 
-	view.AddItem(label, 5, 1, false).
-		AddItem(qrText, 20, 1, false).
+	view.AddItem(label, 5, 0, false).
+		AddItem(qrText, 19, 1, false).
 		AddItem(buttons, 5, 1, true)
 
-	w.nav.ShowModal(components.NewModal(view, 50, 32, w.nav.CloseModal))
+	w.nav.ShowModal(components.NewModal(view, 50, 31, w.nav.CloseModal))
 }
 
-func (w *Wallet) validateTransferFields(strAddress string, strAmount string) (chainutil.Address, float64, error) {
+func (w *Wallet) validateTransferFields(strAddress string, strAmount string) (chainutil.Address, chainutil.Amount, error) {
 
-	address, err := chainutil.DecodeAddress(strAddress, w.load.Params.Network)
+	address, err := chainutil.DecodeAddress(strAddress, w.load.AppConfig.Network)
 	if err != nil {
 		return nil, 0, fmt.Errorf("invalid address")
 	}
@@ -340,11 +378,12 @@ func (w *Wallet) validateTransferFields(strAddress string, strAmount string) (ch
 	w.svCache.address = address
 	w.svCache.amount = amount
 
-	return address, amount.ToFLC(), nil
+	return address, amount, nil
 }
 
 func (w *Wallet) currentStrBalance() string {
-	return shared.FormatAmountView(w.load.Wallet.Balance(), 6)
+	balance := w.load.GetBalance()
+	return shared.FormatAmountView(chainutil.Amount(balance), 6)
 }
 
 func (w *Wallet) transferAmountChanged(form *tview.Form) {
@@ -356,54 +395,55 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 
 	addressField := form.GetFormItem(0).(*tview.TextArea)
 	amountField := form.GetFormItem(1).(*tview.InputField)
-	feeField := form.GetFormItem(2).(*tview.DropDown)
+	feeField := form.GetFormItem(2).(*tview.TextView)
 	totalCostField := form.GetFormItem(5).(*tview.TextView)
 	newBalanceField := form.GetFormItem(6).(*tview.TextView)
 
 	var err error
 	var address chainutil.Address
-	var amount float64
-	var txFee *chainutil.Amount
+	var baseAmount float64
+	var amount chainutil.Amount
 
 	defer func() {
 		if err != nil {
 			w.svCache.totalCost = 0
 			w.svCache.lastErr = err
-			totalCostField.SetText(fmt.Sprintf("[gray::]%.2f", w.svCache.totalCost))
+			feeField.SetText(fmt.Sprintf("[gray::]%.2f", 0.0))
+			totalCostField.SetText(fmt.Sprintf("[gray::]%.2f", 0.0))
 			newBalanceField.SetText(fmt.Sprintf("[gray::]%s", w.currentStrBalance()))
 		}
 	}()
 
-	address, err = chainutil.DecodeAddress(addressField.GetText(), w.load.Params.Network)
+	address, err = chainutil.DecodeAddress(addressField.GetText(), w.load.AppConfig.Network)
 	if err != nil {
 		return
 	}
 
-	amount, err = strconv.ParseFloat(amountField.GetText(), 64)
+	baseAmount, err = strconv.ParseFloat(amountField.GetText(), 64)
+	if err != nil {
+		return
+	}
+	amount, err = chainutil.NewAmount(baseAmount)
 	if err != nil {
 		return
 	}
 
-	feeOptionIndex, _ := feeField.GetCurrentOption() // feeCurrentIndex
-	feeAmount := feeOptions[feeOptionIndex].amount   // feeAmount
-
-	txFee, err = w.load.Wallet.SimpleTransferFee(address, chainutil.Amount(amount), feeAmount)
+	estmFee, err := w.load.Wallet.Fee(address, amount)
 	if err != nil {
 		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
 		return
 	}
+	txFee := chainutil.Amount(estmFee.FeeSat)
 
-	totalcost := amount + txFee.ToFLC()
-	newBalance := w.load.Wallet.Balance() - totalcost
+	balance := w.load.GetBalance()
 
-	if newBalance < 0 {
-		err = errors.New("insufficient balance")
-		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
-		return
-	}
+	totalcost := amount + txFee
+	newBalance := chainutil.Amount(balance) - totalcost
 
-	w.svCache.feePerByte = feeAmount
+	w.svCache.lokiPerVbyte = estmFee.SatPerVbyte
 	w.svCache.totalCost = totalcost
+	w.svCache.fee = txFee
+	feeField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(txFee, 6)))
 	totalCostField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(totalcost, 6)))
 	newBalanceField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(newBalance, 6)))
 }
@@ -416,32 +456,27 @@ func (w *Wallet) closeModal() {
 
 func (w *Wallet) fetchTransactionsRows() [][]string {
 
-	if !w.load.Wallet.IsOpened() {
-		return nil
-	}
-
-	result, err := w.load.Wallet.FetchTransactions()
+	txs, err := w.load.Wallet.FetchTransactions()
 	if err != nil {
 		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
 		return nil
 	}
 
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Confirmations < result[j].Confirmations
-	})
-
 	rows := [][]string{}
-	for _, tx := range result {
+	for _, tx := range txs {
+
 		row := []string{}
-		row = append(row, tx.Timestamp)
-		row = append(row, tx.TxID[:5]+"_"+tx.TxID[len(tx.TxID)-5:])
-		row = append(row, tx.Address)
-		if tx.Amount > 0 {
-			row = append(row, fmt.Sprintf("[green:-:-]%s", shared.FormatAmountView(tx.Amount, 6)))
+		row = append(row, timestampToLocalString(tx.TimeStamp))
+		row = append(row, shortTxID(tx.TxHash))
+		row = append(row, formatOutputAddresses(tx.OutputDetails))
+		flcAmount := chainutil.Amount(tx.Amount)
+
+		if flcAmount > 0 {
+			row = append(row, fmt.Sprintf("[green:-:-]%s", shared.FormatAmountView(flcAmount, 6)))
 		} else {
-			row = append(row, fmt.Sprintf("[red:-:-]%s", shared.FormatAmountView(tx.Amount, 6)))
+			row = append(row, fmt.Sprintf("[red:-:-]%s", shared.FormatAmountView(flcAmount, 6)))
 		}
-		row = append(row, strconv.FormatInt(tx.Confirmations, 10))
+		row = append(row, strconv.FormatInt(int64(tx.NumConfirmations), 10))
 
 		rows = append(rows, row)
 	}
@@ -461,7 +496,7 @@ func (w *Wallet) listenNewTransactions() {
 		case <-w.notifSubscription:
 			w.updateRows()
 
-		case <-w.destroy:
+		case <-w.quit:
 			return
 		}
 	}
@@ -475,5 +510,37 @@ func (w *Wallet) updateRows() {
 }
 
 func (w *Wallet) Destroy() {
-	close(w.destroy)
+	close(w.quit)
+}
+
+func timestampToLocalString(ts int64) string {
+	t := time.Unix(ts, 0).Local()
+	return t.Format("2006-01-02 15:04:05")
+}
+
+func shortTxID(txID string) string {
+	if len(txID) < 10 {
+		return txID // not enough characters to shorten
+	}
+	return txID[:5] + "_" + txID[len(txID)-5:]
+}
+
+func formatOutputAddresses(outputs []*lnrpc.OutputDetail) string {
+	maxDisplay := 1
+	total := len(outputs)
+
+	// Extract up to 3 addresses
+	var parts []string
+	for i := 0; i < total && i < maxDisplay; i++ {
+		parts = append(parts, outputs[i].Address)
+	}
+
+	result := strings.Join(parts, ", ")
+
+	// Add "+N more" if there are more addresses
+	if total > maxDisplay {
+		result += fmt.Sprintf(",(+%d)", total-maxDisplay)
+	}
+
+	return result
 }

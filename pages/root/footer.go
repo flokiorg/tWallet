@@ -10,9 +10,9 @@ import (
 
 	"github.com/rivo/tview"
 
+	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
 	"github.com/flokiorg/twallet/load"
-	"github.com/flokiorg/walletd/chain/electrum"
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -43,10 +43,18 @@ func NewFooter(l *load.Load) *Footer {
 		SetTextAlign(tview.AlignLeft).
 		SetBorderPadding(0, 0, 1, 1)
 
-	fmt.Fprintf(leftSide, "[%s:-:b]<c> [white:-:-]Change Password\t\t", tcell.ColorLightSkyBlue)
-	// fmt.Fprintf(leftSide, "[%s:-:b]<b> [white:-:-]Backup Seed", tcell.ColorLightSkyBlue)
+	switch ev := f.load.Wallet.GetLastEvent(); ev.State {
+	case flnwallet.StatusLocked, flnwallet.StatusDown:
+		break
 
-	f.SetRows(0).SetColumns(30, 0, 20, 3).
+	default:
+		if ok, err := f.load.Wallet.IsLocked(); !ok && !errors.Is(err, flnwallet.ErrDaemonNotRunning) {
+			fmt.Fprintf(leftSide, "[%s:-:b]<c> [white:-:-]Change Password ", tcell.ColorLightSkyBlue)
+			fmt.Fprintf(leftSide, "[%s:-:b]<l> [white:-:-]Lock Wallet", tcell.ColorLightSkyBlue)
+		}
+	}
+
+	f.SetRows(0).SetColumns(37, 0, 26, 3).
 		AddItem(leftSide, 0, 0, 1, 1, 0, 0, false).
 		AddItem(f.infoText, 0, 1, 1, 1, 0, 0, false).
 		AddItem(f.statusText, 0, 2, 1, 1, 0, 0, false).
@@ -65,43 +73,32 @@ func (f *Footer) updates() {
 		case text := <-f.load.Notif.Toast():
 			f.updateInfoText(text)
 
-		case text := <-f.load.Notif.ElectrumToast():
-			f.updateStatusText(text)
+		case hs := <-f.load.Notif.Health():
 
-		case err := <-f.load.Notif.ElectrumHealth():
-
-			if errors.Is(err, electrum.NerrHealthPong) {
+			switch hs.Level {
+			case load.HealthGreen:
 				f.updateStatus(components.GREEN)
-				f.updateHeight()
+				f.updateStatusText(hs.Info)
 
-			} else if errors.Is(err, electrum.NerrHealthRestarting) {
-				f.updateStatus(components.YELLOW)
-			} else {
+			case load.HealthRed:
+				f.load.Logger.Trace().Msgf("health-err: %v", hs.Info)
 				f.updateStatus(components.RED)
-				if errors.Is(err, electrum.ErrServerShutdown) {
-					go f.load.Restart()
+				f.updateStatusText(hs.Info)
+				if hs.Err != nil {
+					f.updateInfoText(fmt.Sprintf("[red:-:-]Error: [-:-:-]%s", hs.Err.Error()))
 				}
+
+			case load.HealthOrange:
+				f.load.Logger.Trace().Msgf("health-info: %v", hs.Info)
+				f.updateStatus(components.YELLOW)
+				f.updateStatusText(hs.Info)
+
 			}
+
 		case <-f.destroy:
 			return
 		}
 
-	}
-}
-
-func (f *Footer) updateHeight() {
-
-	block, err := f.load.Wallet.CurrentWalletBlock()
-	var height int32
-	if err == nil {
-		height = block.Height
-	}
-
-	bestBlock, exists := f.load.AppInfo.GetStartupBlock()
-	if !exists || bestBlock.Height > height {
-		f.updateStatusText("Syncing...")
-	} else {
-		f.updateStatusText(fmt.Sprintf("Height: %d", height))
 	}
 }
 

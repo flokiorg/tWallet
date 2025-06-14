@@ -12,18 +12,16 @@ import (
 
 	"github.com/flokiorg/twallet/components"
 	"github.com/flokiorg/twallet/load"
-	"github.com/flokiorg/twallet/pages/root"
-	"github.com/flokiorg/twallet/pages/wallet"
 	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
 	"github.com/gdamore/tcell/v2"
 )
 
 const (
-	NewWalletView = "new"
-	RestoreView   = "restore"
-	CipherView    = "cipher"
-	ToastView     = "toast"
+	NewWalletView string = "new"
+	RestoreView   string = "restore"
+	CipherView    string = "cipher"
+	ToastView     string = "toast"
 )
 
 type Onboard struct {
@@ -44,10 +42,13 @@ func NewPage(l *load.Load) *Onboard {
 		view:  NewWalletView,
 		pages: tview.NewPages(),
 	}
+
+	netColor := NetworkColor(*l.AppConfig.Network)
+
 	p.SetBorder(true).
 		SetTitleAlign(tview.AlignCenter).
-		SetTitleColor(tcell.ColorOrange).
-		SetBorderColor(tcell.ColorOrange)
+		SetTitleColor(netColor).
+		SetBorderColor(netColor)
 
 	p.switchBtn = components.NewSwitch(p.nav, "New Wallet", "Restore wallet", 0, func(index int) {
 		switch index {
@@ -95,18 +96,16 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 		}
 	}).
 		AddTextArea("Mnemonic: ", "", 0, 0, 0, nil).
-		AddInputField("Wallet name: ", "", 0, nil, nil).
-		AddPasswordField("Spending passphrase: ", "", 0, '*', nil).
-		AddPasswordField("Confirm passphrase: ", "", 0, '*', nil).
+		AddPasswordField("Spending passphrase: ", p.load.AppConfig.DefaultPassword, 0, '*', nil).
+		AddPasswordField("Confirm passphrase: ", p.load.AppConfig.DefaultPassword, 0, '*', nil).
 		AddButton("Restore", func() {
 
 			fromIndex, _ := form.GetFormItem(0).(*tview.DropDown).GetCurrentOption()
 			seedText := form.GetFormItem(1).(*tview.TextArea).GetText()
-			walletName := form.GetFormItem(2).(*tview.InputField).GetText()
-			pass := form.GetFormItem(3).(*tview.InputField).GetText()
-			passConf := form.GetFormItem(4).(*tview.InputField).GetText()
+			pass := form.GetFormItem(2).(*tview.InputField).GetText()
+			passConf := form.GetFormItem(3).(*tview.InputField).GetText()
 
-			if err := p.validateFields(walletName, pass, passConf); err != nil {
+			if err := p.validateFields(pass, passConf); err != nil {
 				p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
 				return
 			}
@@ -129,19 +128,12 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 				st := SeedType(fromIndex)
 				switch st {
 				case HEX:
-					phex, words, err = p.load.Wallet.RestoreByHex(seedText, walletName, pass)
+					phex = seedText
+					words, err = p.load.Wallet.RestoreByEncipheredSeed(phex, pass)
 
 				case MNEMONIC:
-					input := extractSeedWords(seedText)
-
-					switch MnemonicLen(len(input)) {
-					case W12, W18, W24:
-						phex, words, err = p.load.Wallet.RestoreByMnemonic(input, walletName, pass)
-
-					default:
-						err = fmt.Errorf("invalid seed length, got: %d expected %d,%d or %d", len(words), W12, W18, W24)
-						return
-					}
+					words = extractSeedWords(seedText)
+					phex, err = p.load.Wallet.RestoreByMnemonic(words, pass)
 
 				default:
 					err = fmt.Errorf("unexpected choise")
@@ -150,28 +142,6 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 
 				if err != nil {
 					err = fmt.Errorf("failed to restore: %v", err)
-					return
-				}
-
-				counter := make(chan uint32)
-				recoveryDone := make(chan struct{})
-				go func() {
-					for {
-						select {
-						case c := <-counter:
-							p.load.QueueUpdateDraw(func() {
-								p.showToast(fmt.Sprintf("⏳ Recovery in progress… [%d] addresses recovered", c))
-							})
-
-						case <-recoveryDone:
-							return
-						}
-					}
-				}()
-				_, err = p.load.Wallet.Recover(counter)
-				close(recoveryDone)
-				if err != nil {
-					p.load.Wallet.DestroyWallet()
 					return
 				}
 
@@ -202,35 +172,21 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 func (p *Onboard) buildNewWalletForm() tview.Primitive {
 
 	form := tview.NewForm()
-	form.AddDropDown("Word seed type: ", []string{" 12-word seed ", " 18-word seed ", " 24-word seed "}, 0, nil).
-		AddInputField("Wallet name: ", "", 0, nil, nil).
-		AddPasswordField("Spending passphrase: ", "", 0, '*', nil).
-		AddPasswordField("Confirm passphrase: ", "", 0, '*', nil).
+	form.AddPasswordField("Lock passphrase: ", p.load.AppConfig.DefaultPassword, 0, '*', nil).
+		AddPasswordField("Confirm lock passphrase: ", p.load.AppConfig.DefaultPassword, 0, '*', nil).
 		AddButton("Continue", func() {
-			slIndex, _ := form.GetFormItem(0).(*tview.DropDown).GetCurrentOption()
-			walletName := form.GetFormItem(1).(*tview.InputField).GetText()
-			pass := form.GetFormItem(2).(*tview.InputField).GetText()
-			passConf := form.GetFormItem(3).(*tview.InputField).GetText()
+			pass := form.GetFormItem(0).(*tview.InputField).GetText()
+			passConf := form.GetFormItem(1).(*tview.InputField).GetText()
 
-			if err := p.validateFields(walletName, pass, passConf); err != nil {
+			if err := p.validateFields(pass, passConf); err != nil {
 				p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
 				return
 			}
 
-			var seedLen EntropyLen
-			switch slIndex {
-			case 0:
-				seedLen = ENTROPY_LENGTH_12
-			case 1:
-				seedLen = ENTROPY_LENGTH_18
-			case 2:
-				seedLen = ENTROPY_LENGTH_24
-
-			}
-
 			p.showToast("⚡ creating...")
 			go func() {
-				phex, words, err := p.load.Wallet.Create(uint8(seedLen), walletName, pass)
+
+				phex, words, err := p.load.Wallet.CreateWallet(pass)
 				p.load.QueueUpdateDraw(func() {
 					if err != nil {
 						p.pages.SwitchToPage(NewWalletView)
@@ -269,9 +225,7 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 			p.pages.SwitchToPage(CipherView)
 		}
 		p.nav.ShowModal(components.NewDialog("confirm?", "Your mnemonic is NOT saved in the database and CANNOT be restored. Make sure to save it securely.", cancel, []string{"Cancel", "Risk Accepted"}, cancel, func() {
-			layout := root.NewLayout(p.load, wallet.NewPage(p.load))
-			go p.load.StartSync()
-			p.nav.NavigateTo(layout)
+			p.load.Go(shared.WALLET)
 		}))
 	})
 	cipherCard, height, err := components.NewCipher(p.load, words, phex)
@@ -295,11 +249,7 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 	return container, nil
 }
 
-func (p *Onboard) validateFields(walletName, pass, passConf string) error {
-	if len(walletName) <= shared.MinWalletNameLength {
-		return fmt.Errorf("wallet name must be at least %d characters", shared.MinWalletNameLength)
-	}
-
+func (p *Onboard) validateFields(pass, passConf string) error {
 	if pass != passConf {
 		return fmt.Errorf("passwords do not match")
 	}
