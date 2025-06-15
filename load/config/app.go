@@ -7,6 +7,7 @@ import (
 
 type AppConfig struct {
 	flnwallet.ServiceConfig
+	ConfigFile      string `short:"c" long:"config" description:"Path to configuration file"`
 	DefaultPassword string `long:"defaultpassword" description:"Use default passphrase for locking (TESTING ONLY, DO NOT USE IN MAINNET OR PRODUCTION ENVIRONMENTS)"`
 	AddressType     string `long:"addresstype" choice:"taproot" choice:"segwit" choice:"nested-segwit" default:"segwit" description:"Address type to generate (taproot, segwit, or nested-segwit)."`
 	Version         bool   `short:"v" description:"Print version"`

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/flokiorg/flnd/lnrpc"
 	"github.com/flokiorg/go-flokicoin/chainutil"
@@ -20,8 +21,8 @@ import (
 	"github.com/flokiorg/twallet/components"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
+	"github.com/flokiorg/twallet/utils"
 	"github.com/gdamore/tcell/v2"
-	"github.com/skip2/go-qrcode"
 )
 
 type feeOption struct {
@@ -101,7 +102,7 @@ func (w *Wallet) handleKeys(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	}
 
-	switch event.Rune() {
+	switch unicode.ToLower(event.Rune()) {
 	case 's':
 		w.showTransfertView()
 	case 'r':
@@ -242,7 +243,7 @@ func (w *Wallet) showTransfertView() {
 
 						txhash, err := w.load.Wallet.Transfer(w.svCache.address, w.svCache.amount, w.svCache.lokiPerVbyte)
 						if err != nil {
-							w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+							w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 							return
 						}
 						w.load.Logger.Info().
@@ -283,7 +284,7 @@ func (w *Wallet) showReceiveView() {
 
 	address, err := w.load.Wallet.GetNextAddress(w.load.AppConfig.UnusedAddressType)
 	if err != nil {
-		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 		return
 	}
 
@@ -291,9 +292,9 @@ func (w *Wallet) showReceiveView() {
 
 	w.load.Logger.Trace().Str("address", strAddress).Msg("address requested")
 
-	qr, err := qrcode.New(strAddress, qrcode.Highest)
+	qrtxt, err := shared.GenerateQRText(strAddress)
 	if err != nil {
-		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 		return
 	}
 
@@ -302,8 +303,7 @@ func (w *Wallet) showReceiveView() {
 		SetText(fmt.Sprintf("[gray::-]Address:[-:-:-] \n%s", strAddress))
 	label.SetBackgroundColor(tcell.ColorDefault).SetBorderPadding(1, 2, 2, 2)
 
-	qrtxt := shared.CleanupQRtext(qr.ToSmallString(true))
-	qrText := tview.NewTextView()
+	qrText := tview.NewTextView().SetWrap(true).SetWordWrap(true)
 	qrText.SetBackgroundColor(tcell.ColorDefault)
 	qrText.SetText(qrtxt).
 		SetTextAlign(tview.AlignCenter)
@@ -311,25 +311,24 @@ func (w *Wallet) showReceiveView() {
 	cpyBtn := components.NewConfirmButton(w.nav.Application, "copy", true, tcell.ColorDefault, 3, func() {
 		w.load.Notif.CancelToast()
 		if err := shared.ClipboardCopy(strAddress); err != nil {
-			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 		}
 	})
 	nextAddrBtn := components.NewConfirmButton(w.nav.Application, "Next Address", true, tcell.ColorDefault, 3, func() {
 		w.load.Notif.CancelToast()
 		address, err := w.load.Wallet.GetNextAddress(w.load.AppConfig.UsedAddressType)
 		if err != nil {
-			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 			return
 		}
 		strAddress = address.String()
-		qr, err = qrcode.New(strAddress, qrcode.Highest)
+		qrtxt, err = shared.GenerateQRText(strAddress)
 		if err != nil {
-			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 			return
 		}
 		go func() {
 			w.load.Application.QueueUpdateDraw(func() {
-				qrtxt := shared.CleanupQRtext(qr.ToSmallString(true))
 				label.SetText(fmt.Sprintf("[gray::-]Address:[-:-:-] \n%s", strAddress))
 				qrText.SetText(qrtxt)
 			})
@@ -347,11 +346,16 @@ func (w *Wallet) showReceiveView() {
 		SetBackgroundColor(tcell.ColorOrange).
 		SetBorder(true)
 
-	view.AddItem(label, 5, 0, false).
-		AddItem(qrText, 19, 1, false).
+	var expTaprootSize int
+	if utils.IsTaprootAddressType(w.load.AppConfig.UnusedAddressType) {
+		expTaprootSize = 2
+	}
+
+	view.AddItem(label, 5+expTaprootSize, 0, false).
+		AddItem(qrText, 19+expTaprootSize, 1, false).
 		AddItem(buttons, 5, 1, true)
 
-	w.nav.ShowModal(components.NewModal(view, 50, 31, w.nav.CloseModal))
+	w.nav.ShowModal(components.NewModal(view, 50, 31+expTaprootSize+expTaprootSize, w.nav.CloseModal))
 }
 
 func (w *Wallet) validateTransferFields(strAddress string, strAmount string) (chainutil.Address, chainutil.Amount, error) {
@@ -430,7 +434,7 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 
 	estmFee, err := w.load.Wallet.Fee(address, amount)
 	if err != nil {
-		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 		return
 	}
 	txFee := chainutil.Amount(estmFee.FeeSat)
@@ -458,7 +462,7 @@ func (w *Wallet) fetchTransactionsRows() [][]string {
 
 	txs, err := w.load.Wallet.FetchTransactions()
 	if err != nil {
-		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 		return nil
 	}
 

@@ -63,13 +63,22 @@ func GetAddressTypesFromName(name string) (used lnrpc.AddressType, unused lnrpc.
 	}
 }
 
+func IsTaprootAddressType(t lnrpc.AddressType) bool {
+	switch t {
+	case lnrpc.AddressType_TAPROOT_PUBKEY, lnrpc.AddressType_UNUSED_TAPROOT_PUBKEY:
+		return true
+	default:
+		return false
+	}
+}
+
 func FormatBootError(err error) string {
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
 		var sysErr *os.SyscallError
 		if errors.As(opErr.Err, &sysErr) {
 			if errors.Is(sysErr.Err, syscall.EADDRINUSE) {
-				return "Another instance is already running."
+				return fmt.Sprintf("Another instance is already running: %v", err.Error())
 			}
 		}
 	}

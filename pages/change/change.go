@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode"
 
 	"github.com/rivo/tview"
 
@@ -71,7 +72,7 @@ func (p *Change) handleKeys(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	}
 
-	switch event.Rune() {
+	switch unicode.ToLower(event.Rune()) {
 	case 'u':
 		p.showChangeForm()
 	}

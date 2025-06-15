@@ -7,6 +7,7 @@ package unlock
 import (
 	"fmt"
 	"time"
+	"unicode"
 
 	"github.com/rivo/tview"
 
@@ -72,7 +73,7 @@ func (p *Unlock) handleKeys(event *tcell.EventKey) *tcell.EventKey {
 		return event
 	}
 
-	switch event.Rune() {
+	switch unicode.ToLower(event.Rune()) {
 	case 'u':
 		p.showUnlockForm()
 	}

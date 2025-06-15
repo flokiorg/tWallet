@@ -14,6 +14,7 @@ import (
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/go-flokicoin/wire"
 	"github.com/gdamore/tcell/v2"
+	"github.com/skip2/go-qrcode"
 )
 
 const (
@@ -91,9 +92,11 @@ func NetworkColor(network chaincfg.Params) tcell.Color {
 	return logoColor
 }
 
-func CleanupQRtext(qrtxt string) string {
-	txt := strings.TrimLeft(qrtxt, "\n\t\r ")
-	txt = strings.TrimRight(txt, "\n\t\r")
-
-	return "\t" + txt
+func GenerateQRText(txt string) (string, error) {
+	qr, err := qrcode.New(txt, qrcode.High)
+	if err != nil {
+		return "", err
+	}
+	qr.DisableBorder = true
+	return qr.ToSmallString(true), err
 }
