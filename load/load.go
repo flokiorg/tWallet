@@ -21,6 +21,7 @@ import (
 
 	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
+	"github.com/flokiorg/twallet/utils"
 )
 
 type AppConfig struct {
@@ -32,11 +33,16 @@ type AppConfig struct {
 	ConfigFile     string        `short:"c" long:"config" description:"Path to configuration file"`
 	AccountID      uint32        `short:"a" description:"Wallet account ID"`
 	Version        bool          `short:"v" description:"Print version"`
+
+	FeeSlow   float64 `long:"feeslow"   description:"Fee for slow transactions (in loki/vB)" default:"1"`
+	FeeMedium float64 `long:"feemedium" description:"Fee for medium transactions (in loki/vB)" default:"2"`
+	FeeFast   float64 `long:"feefast"   description:"Fee for fast transactions (in loki/vB)" default:"3"`
 }
 
 type AppInfo struct {
 	Config       *AppConfig
 	Params       *walletmgr.WalletParams
+	Fees         []utils.FeeOption
 	startupBlock waddrmgr.BlockStamp
 	mu           sync.Mutex
 }
@@ -61,6 +67,7 @@ func NewAppInfo(cfg *AppConfig, params *walletmgr.WalletParams) *AppInfo {
 	return &AppInfo{
 		Config: cfg,
 		Params: params,
+		Fees:   utils.BuildFeesOptions(cfg.FeeSlow, cfg.FeeMedium, cfg.FeeFast),
 	}
 }
 

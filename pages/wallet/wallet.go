@@ -22,15 +22,6 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
-type feeOption struct {
-	label  string
-	amount chainutil.Amount
-}
-
-var (
-	feeOptions = []feeOption{{" Free ", 0}, {" Slow: 2 loki/vb ", 2}, {" Medium: 2 loki/vb ", 2}, {" Fast: 3 loki/vb ", 3}}
-)
-
 type sendViewModel struct {
 	amount, feePerByte chainutil.Amount
 	address            chainutil.Address
@@ -118,15 +109,15 @@ func (w *Wallet) showTransfertView() {
 
 	w.load.Notif.CancelToast()
 
-	feeOptionsTab := make([]string, 0, len(feeOptions))
-	for _, opt := range feeOptions {
-		feeOptionsTab = append(feeOptionsTab, opt.label)
+	feeOptionsTab := make([]string, 0, len(w.load.Fees))
+	for _, opt := range w.load.Fees {
+		feeOptionsTab = append(feeOptionsTab, opt.Label)
 	}
 	form := tview.NewForm()
 	form.SetBackgroundColor(tcell.ColorDefault).SetBorderPadding(2, 2, 3, 3)
 	form.AddTextArea("Destination Address:", "", 0, 2, 0, func(text string) { w.transferAmountChanged(form) }).
 		AddInputField("Amount:", "", 0, nil, func(text string) { w.transferAmountChanged(form) }).
-		AddDropDown("Fee:", feeOptionsTab, 2, func(option string, optionIndex int) { w.transferAmountChanged(form) }).
+		AddDropDown("Fee:", feeOptionsTab, 1, func(option string, optionIndex int) { w.transferAmountChanged(form) }).
 		AddTextView("", "", 0, 1, true, false).
 		AddTextView("Available balance:", fmt.Sprintf("[gray::]%s", w.currentStrBalance()), 0, 1, true, false).
 		AddTextView("Total cost:", fmt.Sprintf("[gray::]%.2f", 0.0), 0, 1, true, false).
@@ -385,7 +376,7 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 	}
 
 	feeOptionIndex, _ := feeField.GetCurrentOption() // feeCurrentIndex
-	feeAmount := feeOptions[feeOptionIndex].amount   // feeAmount
+	feeAmount := w.load.Fees[feeOptionIndex].Amount  // feeAmount
 
 	txFee, err = w.load.Wallet.SimpleTransferFee(address, chainutil.Amount(amount), feeAmount)
 	if err != nil {
