@@ -32,7 +32,7 @@ var (
 	defaultPubPass               = "/flc/public"
 	defaultWordList              = wordlists.English
 	defaultNetwork               = &chaincfg.MainNetParams
-	defaultAppName               = "flcwallet"
+	defaultAppName               = "twallet"
 	defaultElectrumPort          = 50001
 	defaultConfigFilename        = "twallet.conf"
 	defaultAccountID      uint32 = 1
