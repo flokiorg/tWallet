@@ -5,37 +5,27 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/flokiorg/go-flokicoin/chaincfg"
 	"github.com/flokiorg/go-flokicoin/chainutil"
-	"github.com/flokiorg/twallet/load"
+	"github.com/flokiorg/twallet/load/config"
 	"github.com/flokiorg/twallet/tui"
 	"github.com/flokiorg/twallet/utils"
-	"github.com/flokiorg/walletd/waddrmgr"
-	"github.com/flokiorg/walletd/walletdb/bdb"
 	"github.com/jessevdk/go-flags"
-	bolterr "go.etcd.io/bbolt/errors"
-
-	"github.com/flokiorg/walletd/walletmgr"
-	"github.com/flokiorg/walletd/walletseed/bip39"
-	"github.com/flokiorg/walletd/walletseed/bip39/wordlists"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 var (
-	defaultDBTimeout             = 10 * time.Second
-	defaultPubPass               = "/flc/public"
-	defaultWordList              = wordlists.English
-	defaultNetwork               = &chaincfg.MainNetParams
-	defaultAppName               = "twallet"
-	defaultElectrumPort          = 50001
-	defaultConfigFilename        = "twallet.conf"
-	defaultAccountID      uint32 = 1
+	defaultConnectionTimeout        = 60 * time.Second
+	defaultNetwork                  = &chaincfg.MainNetParams
+	defaultAppDataDir               = "flnd"
+	defaultConfigFilename           = "twallet.conf"
+	defaultMainnetFeeURL            = "https://flokichain.info/api/v1/fees/recommended"
+	defaultAccountID         uint32 = 1
 
 	parser *flags.Parser
 )
@@ -46,7 +36,7 @@ func init() {
 
 func main() {
 
-	var cfg load.AppConfig
+	var cfg config.AppConfig
 
 	parser = flags.NewParser(&cfg, flags.Default|flags.PassDoubleDash)
 	if _, err := parser.Parse(); err != nil {
@@ -73,68 +63,40 @@ func main() {
 		}
 	}
 
-	if opt := parser.FindOptionByShortName('e'); !optionDefined(opt) {
-		exitWithError("Electrum server (-e, --electserver) is required but not provided.", nil)
-	}
-	electrumServerEndpoint, err := utils.ValidateAndNormalizeURI(cfg.ElectrumServer, defaultElectrumPort)
-	if err != nil {
-		exitWithError("invalid electserver", nil)
-	}
-
 	if opt := parser.FindOptionByShortName('t'); !optionDefined(opt) {
-		cfg.DBTimeout = defaultDBTimeout
+		cfg.ConnectionTimeout = defaultConnectionTimeout
 	}
 
-	if opt := parser.FindOptionByShortName('d'); !optionDefined(opt) {
-		cfg.WalletDir = chainutil.AppDataDir(defaultAppName, false)
+	if opt := parser.FindOptionByShortName('w'); !optionDefined(opt) {
+		cfg.Walletdir = chainutil.AppDataDir(defaultAppDataDir, false)
 	}
 
-	if opt := parser.FindOptionByShortName('a'); !optionDefined(opt) {
-		cfg.AccountID = defaultAccountID
-	}
-
-	network := defaultNetwork
+	cfg.Network = defaultNetwork
 	if cfg.RegressionTest {
-		network = &chaincfg.RegressionNetParams
+		cfg.Network = &chaincfg.RegressionNetParams
 	} else if cfg.Testnet {
-		network = &chaincfg.TestNet3Params
+		cfg.Network = &chaincfg.TestNet3Params
 	}
 
-	params := &walletmgr.WalletParams{
-		Network:        network,
-		ElectrumServer: electrumServerEndpoint,
-		Path:           cfg.WalletDir,
-		Timeout:        cfg.DBTimeout,
-		PublicPassword: defaultPubPass,
-		AddressScope:   waddrmgr.KeyScopeBIP0044,
-		AccountID:      cfg.AccountID,
+	if opt := parser.FindOptionByLongName("feeurl"); !optionDefined(opt) && cfg.Network.Name == chaincfg.MainNetParams.Name {
+		cfg.Feeurl = defaultMainnetFeeURL
 	}
 
-	// Register the backend database
-	bdb.Register()
-
-	// init word list
-	bip39.SetWordList(defaultWordList)
-
-	wallet := walletmgr.NewWalletService(params)
-
-	if err := wallet.OpenWallet(); err != nil {
-		if errors.Is(err, bolterr.ErrTimeout) {
-			log.Fatal().Msgf("timeout occurred: the wallet may already be opened by another process")
-		} else if !errors.Is(err, walletmgr.ErrWalletNotfound) {
-			log.Fatal().Err(err).Msgf("unable to open existing wallet")
-		}
+	usedType, unusedType, err := utils.GetAddressTypesFromName(cfg.AddressType)
+	if err != nil {
+		exitWithError("Failed to parse configuration file", err)
 	}
+	cfg.UsedAddressType = usedType
+	cfg.UnusedAddressType = unusedType
 
-	if err = os.MkdirAll(cfg.WalletDir, 0755); err != nil {
-		log.Fatal().Err(err).Msgf("Failed to create wallet directory: %s", cfg.WalletDir)
-	}
+	app := tui.NewApp(&cfg)
 
-	appInfo := load.NewAppInfo(&cfg, params)
-	app := tui.NewApp(appInfo, wallet)
 	if err := app.Run(); err != nil {
 		log.Fatal().Err(err).Msg("app failed")
 	}
+	fmt.Println("Shutting down...")
+	app.Close()
+	fmt.Println("Shutdown complete")
 }
 
 func exitWithError(msg string, err error) {

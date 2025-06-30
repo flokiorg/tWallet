@@ -20,36 +20,29 @@ type Layout struct {
 	header *Header
 	body   *Body
 	footer *Footer
+	load   *load.Load
 }
 
-func NewLayout(l *load.Load, page tview.Primitive) *Layout {
+func NewLayout(l *load.Load, page tview.Primitive) tview.Primitive {
 
 	if currentLayout != nil {
-		if currentLayout.header != nil {
-			currentLayout.header.Destroy()
-		}
-		if currentLayout.footer != nil {
-			currentLayout.footer.Destroy()
-		}
+		currentLayout.destroy()
 	}
 
 	layout := &Layout{
 		Flex: tview.NewFlex(),
+		load: l,
 	}
 
 	layout.header = NewHeader(l)
 	layout.body = NewBody(page)
+	layout.footer = NewFooter(l)
 
 	layout.SetDirection(tview.FlexRow).
 		AddItem(layout.header, 6, 0, false).
-		AddItem(layout.body, 0, 1, true)
+		AddItem(layout.body, 0, 1, true).
+		AddItem(layout.footer, 2, 0, false)
 
-	if l.Wallet.IsOpened() {
-		layout.footer = NewFooter(l)
-		layout.AddItem(layout.footer, 2, 0, false)
-	}
-
-	// Ensure the focus is always on the body
 	layout.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if layout.body != nil && l.Application.GetFocus() != layout.body {
 			l.Application.SetFocus(layout.body) // Restore focus to body
@@ -59,4 +52,13 @@ func NewLayout(l *load.Load, page tview.Primitive) *Layout {
 
 	currentLayout = layout
 	return currentLayout
+}
+
+func (l *Layout) destroy() {
+	if currentLayout.header != nil {
+		currentLayout.header.Destroy()
+	}
+	if currentLayout.footer != nil {
+		currentLayout.footer.Destroy()
+	}
 }

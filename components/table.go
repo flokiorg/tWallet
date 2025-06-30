@@ -34,17 +34,18 @@ type Table struct {
 
 	columns []Column
 	// rows         *FLowMetricsSlice
-	scrollOnce   sync.Once
-	setupColumns sync.Once
-
-	sortedColumn *Column
+	scrollOnce sync.Once
+	netColor   tcell.Color
+	maxRows    int
 }
 
-func NewTable(title string, columns []Column) *Table {
+func NewTable(title string, columns []Column, netColor tcell.Color, maxRows int) *Table {
 	t := &Table{
-		Table:   tview.NewTable(),
-		title:   title,
-		columns: columns,
+		Table:    tview.NewTable(),
+		title:    title,
+		columns:  columns,
+		netColor: netColor,
+		maxRows:  maxRows,
 	}
 
 	t.SetFixed(1, 1).
@@ -57,15 +58,20 @@ func NewTable(title string, columns []Column) *Table {
 		Foreground(tcell.ColorWhite),
 	)
 
-	t.UpdateTitle(0)
+	t.UpdateTitle(0, false)
 
 	t.DrawHeaders()
 
 	return t
 }
 
-func (t *Table) UpdateTitle(count int) {
-	t.SetTitle(fmt.Sprintf(" [::b][%s]%s [[%s]%d[%s]] ", tcell.ColorOrange, strings.ToUpper(t.title), tcell.ColorWhiteSmoke, count, tcell.ColorOrange))
+func (t *Table) UpdateTitle(count int, hasMore bool) {
+	strCount := fmt.Sprintf("%d", count)
+	if hasMore {
+		strCount = fmt.Sprintf("%d+", count)
+	}
+
+	t.SetTitle(fmt.Sprintf(" [::b][%s]%s [[%s]%s[%s]] ", t.netColor, strings.ToUpper(t.title), tcell.ColorWhiteSmoke, strCount, t.netColor))
 }
 
 func (t *Table) DrawHeaders() {
@@ -98,7 +104,7 @@ func (t *Table) Update(rows [][]string) {
 
 	t.Clear()
 
-	t.UpdateTitle(len(rows))
+	t.UpdateTitle(len(rows), false)
 	t.DrawHeaders()
 
 	for rid, row := range rows {

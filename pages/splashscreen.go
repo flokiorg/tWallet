@@ -37,26 +37,54 @@ func logoView() tview.Primitive {
 	return view
 }
 
-func SplashScreen() tview.Primitive {
+func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 
 	welcomeText := tview.NewTextView().
 		SetText(WELCOME_MESSAGE).
-		SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter)
 
-	textRow := tview.NewFlex().
+	welcomRow := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
 		AddItem(welcomeText, 1, 1, false).
+		AddItem(nil, 0, 1, false)
+
+	bootTextField := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter)
+
+	bootTextCentered := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(nil, 0, 1, false).
+		AddItem(bootTextField, 80, 0, false).
+		AddItem(nil, 0, 1, false)
+
+	bootTextRow := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(bootTextCentered, 5, 1, false).
 		AddItem(nil, 0, 1, false)
 
 	view := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
 		AddItem(logoView(), 9, 1, false).
-		AddItem(textRow, 1, 1, false).
+		AddItem(welcomRow, 1, 1, false).
+		AddItem(nil, 0, 1, false).
+		AddItem(bootTextRow, 1, 1, false).
 		AddItem(nil, 0, 1, false)
 
-	return view
+	bootText := make(chan string)
+	go func() {
+		for t := range bootText {
+			app.QueueUpdateDraw(func() {
+				bootTextField.SetText(t)
+			})
+		}
+	}()
+
+	return bootText, view
 }
 
 func ReloadingScreen() *tview.Flex {

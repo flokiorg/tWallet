@@ -13,7 +13,7 @@ type Navigator struct {
 	pages *tview.Pages
 }
 
-func NewNavigator(app *tview.Application, pages *tview.Pages) *Navigator {
+func newNavigator(app *tview.Application, pages *tview.Pages) *Navigator {
 	return &Navigator{
 		Application: app,
 		pages:       pages,
