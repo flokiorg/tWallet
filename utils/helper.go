@@ -73,6 +73,9 @@ func IsTaprootAddressType(t lnrpc.AddressType) bool {
 }
 
 func FormatBootError(err error) string {
+	if err == nil {
+		return "unexpected error"
+	}
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
 		var sysErr *os.SyscallError
