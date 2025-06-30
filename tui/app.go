@@ -48,10 +48,9 @@ func init() {
 
 type App struct {
 	*tview.Application
-	pages    *tview.Pages
-	cfg      *config.AppConfig
-	flnsvc   *flnwallet.Service
-	bootText chan<- string
+	pages  *tview.Pages
+	cfg    *config.AppConfig
+	flnsvc *flnwallet.Service
 }
 
 func NewApp(cfg *config.AppConfig) *App {
@@ -69,19 +68,18 @@ func NewApp(cfg *config.AppConfig) *App {
 
 	app.SetRoot(app.pages, true).SetFocus(app.pages)
 
-	app.bootText = bootText
-	go app.init()
+	go app.init(bootText)
 
 	return app
 }
 
-func (app *App) init() {
+func (app *App) init(bootText chan<- string) {
 
-	defer close(app.bootText)
-	flnsvc := flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
+	defer close(bootText)
+	app.flnsvc = flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
 
-	sub := flnsvc.Subscribe()
-	defer flnsvc.Unsubscribe(sub)
+	sub := app.flnsvc.Subscribe()
+	defer app.flnsvc.Unsubscribe(sub)
 
 loop:
 	for u := range sub {
@@ -90,10 +88,11 @@ loop:
 
 		case flnwallet.StatusDown:
 			select {
-			case app.bootText <- fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", utils.FormatBootError(u.Err)):
+			case bootText <- fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", utils.FormatBootError(u.Err)):
 			default:
 			}
-			continue
+			app.flnsvc.Stop()
+			return
 
 		case flnwallet.StatusQuit:
 			app.Stop()
@@ -104,11 +103,9 @@ loop:
 		}
 	}
 
-	app.flnsvc = flnsvc
-
 	time.AfterFunc(splashScreenDelay, func() {
 		app.QueueUpdateDraw(func() {
-			loader := load.NewLoad(app.cfg, flnsvc, app.Application, app.pages)
+			loader := load.NewLoad(app.cfg, app.flnsvc, app.Application, app.pages)
 			app.pages.AddAndSwitchToPage("main", pages.NewEntrypoint(loader), true)
 		})
 	})

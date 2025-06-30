@@ -41,7 +41,8 @@ func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 
 	welcomeText := tview.NewTextView().
 		SetText(WELCOME_MESSAGE).
-		SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter)
 
 	welcomRow := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -50,11 +51,19 @@ func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 		AddItem(nil, 0, 1, false)
 
 	bootTextField := tview.NewTextView().
-		SetDynamicColors(true).SetTextAlign(tview.AlignCenter)
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignCenter)
+
+	bootTextCentered := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(nil, 0, 1, false).
+		AddItem(bootTextField, 80, 0, false).
+		AddItem(nil, 0, 1, false)
+
 	bootTextRow := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(bootTextField, 1, 1, false).
+		AddItem(bootTextCentered, 5, 1, false).
 		AddItem(nil, 0, 1, false)
 
 	view := tview.NewFlex().
