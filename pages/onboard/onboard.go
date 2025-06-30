@@ -225,7 +225,11 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 			p.pages.SwitchToPage(CipherView)
 		}
 		p.nav.ShowModal(components.NewDialog("confirm?", "Your mnemonic is NOT saved in the database and CANNOT be restored. Make sure to save it securely.", cancel, []string{"Cancel", "Risk Accepted"}, cancel, func() {
-			p.load.Go(shared.WALLET)
+			go func() {
+				p.load.QueueUpdateDraw(func() {
+					p.load.Go(shared.WALLET)
+				})
+			}()
 		}))
 	})
 	cipherCard, height, err := components.NewCipher(p.load, words, phex)
