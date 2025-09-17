@@ -175,7 +175,7 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 	case flnwallet.StatusSyncing:
 		var info string
 		if ev.BlockHeight == 0 {
-			info = "syncing..."
+			info = "init..."
 		} else {
 			info = fmt.Sprintf("syncing... (%d)", ev.BlockHeight)
 		}
