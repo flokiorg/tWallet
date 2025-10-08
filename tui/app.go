@@ -13,8 +13,8 @@ import (
 	"github.com/rivo/tview"
 
 	"github.com/flokiorg/flnd/flnwallet"
+	"github.com/flokiorg/twallet/config"
 	"github.com/flokiorg/twallet/load"
-	"github.com/flokiorg/twallet/load/config"
 	"github.com/flokiorg/twallet/pages"
 	"github.com/flokiorg/twallet/utils"
 )
