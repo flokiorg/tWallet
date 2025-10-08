@@ -13,11 +13,14 @@ const (
 	ArtOrange = "\033[38;2;177;128;10m"
 	ArtBright = "\033[1m"
 	ArtText   = `
- _           _    _      _           _       
-| |         | |  (_)    | |         (_)      
-| |     ___ | | ___  ___| |__   __ _ _ _ __  
-| |    / _ \| |/ / |/ __| '_ \ / _` + "`" + ` | | '_ \ 
-| |___| (_) |   <| | (__| | | | (_| | | | | |
-|______\___/|_|\_\_|\___|_| |_|\__,_|_|_| |_|
+    __      __       __            __  __              __     
+  /  |    /  |  _  /  |          /  |/  |            /  |    
+ _FF |_   FF | / \ FF |  ______  FF |FF |  ______   _FF |_   
+/ FF   |  FF |/F  \FF | /      \ FF |FF | /      \ / FF   |  
+FFFFFF/   FF /FFF  FF | FFFFFF  |FF |FF |/FFFFFF  |FFFFFF/   
+  FF | __ FF FF/FF FF | /    FF |FF |FF |FF    FF |  FF | __ 
+  FF |/  |FFFF/  FFFF |/FFFFFFF |FF |FF |FFFFFFFF/   FF |/  |
+  FF  FF/ FFF/    FFF |FF    FF |FF |FF |FF       |  FF  FF/ 
+   FFFF/  FF/      FF/  FFFFFFF/ FF/ FF/  FFFFFFF/    FFFF/ 
 `
 )
