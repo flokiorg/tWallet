@@ -5,10 +5,7 @@
 package pages
 
 import (
-	"bytes"
 	"fmt"
-	"image/png"
-	"os"
 	"strings"
 
 	"github.com/rivo/tview"
@@ -89,26 +86,15 @@ func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 
 func ReloadingScreen() *tview.Flex {
 
-	logoBytes, _ := os.ReadFile(LOGO_TEXT)
-	graphics, _ := png.Decode(bytes.NewReader(logoBytes))
-	logo := tview.NewImage()
-	logo.SetImage(graphics).SetColors(tview.TrueColor)
-
 	text := tview.NewTextView().
 		SetText(fmt.Sprintf("[-:-:-] %s", "loading...")).
 		SetTextAlign(tview.AlignCenter).
 		SetDynamicColors(true)
 
-	centerRow := tview.NewFlex().
-		SetDirection(tview.FlexColumn).
-		AddItem(nil, 0, 1, false).
-		AddItem(logo, 0, 1, false).
-		AddItem(nil, 0, 1, false)
-
 	rootFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(centerRow, 0, 1, false).
+		AddItem(logoView(), 9, 1, false).
 		AddItem(text, 1, 1, false).
 		AddItem(nil, 0, 1, false)
 
