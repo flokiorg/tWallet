@@ -14,7 +14,6 @@ import (
 	"github.com/flokiorg/flnd/lnrpc"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/twallet/load"
-	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
 	"github.com/flokiorg/twallet/utils"
 	"github.com/gdamore/tcell/v2"
@@ -67,7 +66,7 @@ func NewHeader(l *load.Load) *Header {
 	statusMessage := ""
 	statusColor := tcell.ColorYellow
 
-	statusMessage = "Syncing balance..."
+	statusMessage = "Syncing..."
 	statusColor = tcell.ColorYellow
 
 	h.hotkeys = buildSendReceiveView()
@@ -76,7 +75,8 @@ func NewHeader(l *load.Load) *Header {
 	h.status = statusMessage
 
 	walletInfo := tview.NewGrid().
-		SetRows(1, 1, 1, 2).SetColumns(0)
+		SetRows(1, 1, 1, 2).
+		SetColumns(0)
 
 	walletInfo.AddItem(h.balance, 1, 0, 2, 1, 0, 0, false).
 		AddItem(h.hotkeys, 3, 0, 1, 1, 0, 0, false)
@@ -138,13 +138,13 @@ func (h *Header) handleNotification(evt *load.NotificationEvent) {
 		h.refreshBalance()
 
 	case evt.State == flnwallet.StatusSyncing:
-		h.showBalanceStatus("Syncing balance...", tcell.ColorYellow)
+		h.showBalanceStatus("Syncing...", tcell.ColorYellow)
 
 	case evt.State == flnwallet.StatusDown:
-		h.showBalanceStatus("Reconnecting to wallet...", tcell.ColorOrange)
+		h.showBalanceStatus("Reconnecting...", tcell.ColorOrange)
 
 	case evt.State == flnwallet.StatusNone:
-		h.showBalanceStatus("Connecting to wallet...", tcell.ColorYellow)
+		h.showBalanceStatus("Connecting...", tcell.ColorYellow)
 
 	case evt.State == flnwallet.StatusNoWallet:
 		h.showBalanceStatus("Wallet not found.", tcell.ColorRed)
@@ -269,9 +269,24 @@ func balanceView(balance *lnrpc.WalletBalanceResponse) string {
 	if balance == nil {
 		return fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, DefaultBalanceView)
 	}
-	strBalance := fmt.Sprintf("Balance: [%s:-:b]%s \n", tcell.ColorGreen, shared.FormatAmountView(chainutil.Amount(balance.ConfirmedBalance), 6))
-	strBalance += fmt.Sprintf("[-:-:-]Unconfirmed: [%s:-:b]%s\n", tcell.ColorGreen, shared.FormatAmountView(chainutil.Amount(balance.UnconfirmedBalance), 6))
-	// strBalance += fmt.Sprintf("[-:-:-]Locked: [%s:-:b]%s", tcell.ColorGreen, shared.FormatAmountView(chainutil.Amount(balance.LockedBalance), 6))
+	strBalance := fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(balance.ConfirmedBalance), 6))
+
+	locked := balance.LockedBalance
+	unconfirmed := balance.UnconfirmedBalance
+
+	if locked > 0 && unconfirmed > 0 {
+		total := locked + unconfirmed
+		strBalance += fmt.Sprintf("[-:-:-]Pending: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(total), 6))
+		return strBalance
+	}
+
+	if unconfirmed > 0 || locked == 0 {
+		strBalance += fmt.Sprintf("[-:-:-]Unconfirmed: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(unconfirmed), 6))
+	}
+	if locked > 0 {
+		strBalance += fmt.Sprintf("[-:-:-]Locked: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(locked), 6))
+	}
+
 	return strBalance
 }
 

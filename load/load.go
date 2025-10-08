@@ -161,6 +161,17 @@ func (n *notification) BroadcastWalletUpdate(event *NotificationEvent) {
 	}
 }
 
+func (n *notification) BroadcastBalanceRefresh() {
+	n.BroadcastWalletUpdate(nil)
+}
+
+func (l *Load) BroadcastBalanceRefresh() {
+	if l == nil || l.Notif == nil {
+		return
+	}
+	l.Notif.BroadcastBalanceRefresh()
+}
+
 func (n *notification) listen() {
 
 	for {

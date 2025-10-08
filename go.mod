@@ -6,14 +6,15 @@ toolchain go1.24.3
 
 require (
 	github.com/atotto/clipboard v0.1.4
-	github.com/flokiorg/flnd v0.1.2-beta
-	github.com/flokiorg/go-flokicoin v0.25.7-beta
+	github.com/flokiorg/flnd v0.1.3-beta
+	github.com/flokiorg/go-flokicoin v0.25.8-beta
 	github.com/flokiorg/walletd v0.1.3-beta
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
 	github.com/rs/zerolog v1.34.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	google.golang.org/grpc v1.71.0
 )
 
 require (
@@ -172,7 +173,6 @@ require (
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250227231956-55c901821b1e // indirect
-	google.golang.org/grpc v1.71.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/errgo.v1 v1.0.1 // indirect
 	gopkg.in/macaroon-bakery.v2 v2.0.1 // indirect

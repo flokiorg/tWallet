@@ -46,6 +46,7 @@ type sendViewModel struct {
 	lokiPerVbyte           uint64
 	finalTx                *chainutil.Tx
 	locks                  []*flnwallet.OutputLock
+	feeCalcID              uint64
 }
 
 type walletView int
@@ -490,60 +491,103 @@ func (w *Wallet) showTransfertView() {
 		AddTextView("", "", 0, 1, true, false).
 		AddTextView("Available balance:", fmt.Sprintf("[gray::]%s", w.currentStrBalance()), 0, 1, true, false).
 		AddTextView("Total cost:", fmt.Sprintf("[gray::]%.2f", 0.0), 0, 1, true, false).
-		AddTextView("Balance After send:", fmt.Sprintf("[gray::]%s", w.currentStrBalance()), 0, 1, true, false).
-		AddButton("Cancel", w.closeModal).
-		AddButton("Next", func() {
-			w.load.Notif.CancelToast()
+		AddTextView("Balance After send:", fmt.Sprintf("[gray::]%s", w.currentStrBalance()), 0, 1, true, false)
 
-			addressField := form.GetFormItem(0).(*tview.TextArea)
-			amountField := form.GetFormItem(1).(*tview.InputField)
-			feeField := form.GetFormItem(2).(*tview.TextView)
-			totalCostField := form.GetFormItem(5).(*tview.TextView)
-			newBalanceField := form.GetFormItem(6).(*tview.TextView)
+	var nextHandler func()
+	var nextButton, cancelButton *tview.Button
 
-			address, amount, err := w.validateTransferFields(addressField.GetText(), amountField.GetText())
-			if err != nil {
-				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
-				w.load.Application.SetFocus(addressField)
-				return
-			}
+	form.AddButton("Cancel", func() {
+		w.closeModal()
+	})
+	form.AddButton("Next", func() {
+		if nextHandler != nil {
+			nextHandler()
+		}
+	})
 
-			w.mu.Lock()
-			if w.svCache.isPreparing {
-				w.mu.Unlock()
-				return
-			}
-			w.svCache.isPreparing = true
+	if idx := form.GetButtonIndex("Cancel"); idx >= 0 {
+		cancelButton = form.GetButton(idx)
+	}
+	if idx := form.GetButtonIndex("Next"); idx >= 0 {
+		nextButton = form.GetButton(idx)
+	}
+
+	disableInputs := func(disable bool) {
+		if item, ok := form.GetFormItem(0).(*tview.TextArea); ok {
+			item.SetDisabled(disable)
+		}
+		if item, ok := form.GetFormItem(1).(*tview.InputField); ok {
+			item.SetDisabled(disable)
+		}
+		if nextButton != nil {
+			nextButton.SetDisabled(disable)
+		}
+		if cancelButton != nil {
+			cancelButton.SetDisabled(false)
+		}
+	}
+
+	nextHandler = func() {
+		w.load.Notif.CancelToast()
+
+		addressField := form.GetFormItem(0).(*tview.TextArea)
+		amountField := form.GetFormItem(1).(*tview.InputField)
+		feeField := form.GetFormItem(2).(*tview.TextView)
+		totalCostField := form.GetFormItem(5).(*tview.TextView)
+		newBalanceField := form.GetFormItem(6).(*tview.TextView)
+
+		address, amount, err := w.validateTransferFields(addressField.GetText(), amountField.GetText())
+		if err != nil {
+			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
+			w.load.Application.SetFocus(addressField)
+			return
+		}
+
+		w.mu.Lock()
+		if w.svCache.isPreparing {
 			w.mu.Unlock()
+			return
+		}
+		w.svCache.isPreparing = true
+		w.mu.Unlock()
 
-			w.setFormDisabled(form, true)
-			w.load.Notif.ShowToast("⏳ preparing transaction...")
+		disableInputs(true)
+		if nextButton != nil {
+			nextButton.SetLabel("Please wait...")
+		}
+		w.load.Notif.ShowToast("⏳ preparing transaction...")
 
-			go func(addr chainutil.Address, amt chainutil.Amount, dstAddress string) {
-				err := w.prepareTransfer(addr, amt)
+		go func(addr chainutil.Address, amt chainutil.Amount, dstAddress string) {
+			err := w.prepareTransfer(addr, amt)
 
-				w.load.Application.QueueUpdateDraw(func() {
-					w.load.Notif.CancelToast()
+			w.load.Application.QueueUpdateDraw(func() {
+				w.load.Notif.CancelToast()
 
-					w.mu.Lock()
-					w.svCache.isPreparing = false
-					w.mu.Unlock()
+				w.mu.Lock()
+				w.svCache.isPreparing = false
+				w.mu.Unlock()
 
-					if err != nil {
-						w.setFormDisabled(form, false)
-						w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
-						w.load.Application.SetFocus(addressField)
-						return
+				if err != nil {
+					disableInputs(false)
+					if nextButton != nil {
+						nextButton.SetLabel("Next")
 					}
+					w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
+					w.load.Application.SetFocus(addressField)
+					return
+				}
 
-					feeField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.fee, 6)))
-					totalCostField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.totalCost, 6)))
-					newBalanceField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.balanceAfter, 6)))
+				feeField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.fee, 6)))
+				totalCostField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.totalCost, 6)))
+				newBalanceField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(w.svCache.balanceAfter, 6)))
+				if nextButton != nil {
+					nextButton.SetLabel("Next")
+				}
 
-					w.showTransferConfirmation(dstAddress, amt, totalCostField.GetText(false), newBalanceField.GetText(false))
-				})
-			}(address, amount, addressField.GetText())
-		})
+				w.showTransferConfirmation(dstAddress, amt, totalCostField.GetText(false), newBalanceField.GetText(false))
+			})
+		}(address, amount, addressField.GetText())
+	}
 
 	view := tview.NewFlex()
 	view.SetTitle("Send").
@@ -554,18 +598,6 @@ func (w *Wallet) showTransfertView() {
 	view.AddItem(form, 0, 1, true)
 
 	w.nav.ShowModal(components.NewModal(view, 50, 22, w.closeModal))
-}
-
-func (w *Wallet) setFormDisabled(form *tview.Form, disabled bool) {
-	if form == nil {
-		return
-	}
-	for i := 0; i < form.GetFormItemCount(); i++ {
-		form.GetFormItem(i).SetDisabled(disabled)
-	}
-	for i := 0; i < form.GetButtonCount(); i++ {
-		form.GetButton(i).SetDisabled(disabled)
-	}
 }
 
 func (w *Wallet) prepareTransfer(address chainutil.Address, amount chainutil.Amount) error {
@@ -597,6 +629,7 @@ func (w *Wallet) prepareTransfer(address chainutil.Address, amount chainutil.Amo
 		if err := w.load.Wallet.ReleaseOutputs(funded.Locks); err != nil {
 			w.load.Logger.Warn().Err(err).Msg("failed to release outputs after finalize failure")
 		}
+		w.load.BroadcastBalanceRefresh()
 		return err
 	}
 
@@ -611,6 +644,8 @@ func (w *Wallet) prepareTransfer(address chainutil.Address, amount chainutil.Amo
 	w.svCache.locks = funded.Locks
 	w.svCache.lastErr = nil
 	w.mu.Unlock()
+
+	w.load.BroadcastBalanceRefresh()
 
 	return nil
 }
@@ -846,73 +881,116 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 		return
 	}
 
-	addressField := form.GetFormItem(0).(*tview.TextArea)
-	amountField := form.GetFormItem(1).(*tview.InputField)
-	feeField := form.GetFormItem(2).(*tview.TextView)
-	totalCostField := form.GetFormItem(5).(*tview.TextView)
-	newBalanceField := form.GetFormItem(6).(*tview.TextView)
-
-	var err error
-	var address chainutil.Address
-	var baseAmount float64
-	var amount chainutil.Amount
-
-	defer func() {
-		if err != nil {
-			w.mu.Lock()
-			w.svCache.totalCost = 0
-			w.svCache.balanceAfter = 0
-			w.svCache.lastErr = err
-			w.svCache.finalTx = nil
-			w.mu.Unlock()
-			feeField.SetText(fmt.Sprintf("[gray::]%.2f", 0.0))
-			totalCostField.SetText(fmt.Sprintf("[gray::]%.2f", 0.0))
-			newBalanceField.SetText(fmt.Sprintf("[gray::]%s", w.currentStrBalance()))
-		} else {
-			w.mu.Lock()
-			w.svCache.lastErr = nil
-			w.mu.Unlock()
-		}
-	}()
-
-	address, err = chainutil.DecodeAddress(addressField.GetText(), w.load.AppConfig.Network)
-	if err != nil {
+	addressField, ok := form.GetFormItem(0).(*tview.TextArea)
+	if !ok {
+		return
+	}
+	amountField, ok := form.GetFormItem(1).(*tview.InputField)
+	if !ok {
+		return
+	}
+	feeField, ok := form.GetFormItem(2).(*tview.TextView)
+	if !ok {
+		return
+	}
+	totalCostField, ok := form.GetFormItem(5).(*tview.TextView)
+	if !ok {
+		return
+	}
+	newBalanceField, ok := form.GetFormItem(6).(*tview.TextView)
+	if !ok {
 		return
 	}
 
-	baseAmount, err = strconv.ParseFloat(amountField.GetText(), 64)
-	if err != nil {
-		return
+	resetFields := func() {
+		feeField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(0, 6)))
+		totalCostField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(0, 6)))
+		newBalanceField.SetText(fmt.Sprintf("[gray::]%s", w.currentStrBalance()))
 	}
-	amount, err = chainutil.NewAmount(baseAmount)
+
+	address, err := chainutil.DecodeAddress(addressField.GetText(), w.load.AppConfig.Network)
 	if err != nil {
+		resetFields()
 		return
 	}
 
-	estmFee, err := w.load.Wallet.Fee(address, amount)
+	baseAmount, err := strconv.ParseFloat(amountField.GetText(), 64)
 	if err != nil {
-		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
+		resetFields()
 		return
 	}
-	txFee := chainutil.Amount(estmFee.FeeSat)
-
-	balance := w.load.GetBalance()
-
-	totalcost := amount + txFee
-	newBalance := chainutil.Amount(balance) - totalcost
+	amount, err := chainutil.NewAmount(baseAmount)
+	if err != nil {
+		resetFields()
+		return
+	}
 
 	w.load.Notif.CancelToast()
 
 	w.mu.Lock()
-	w.svCache.lokiPerVbyte = estmFee.SatPerVbyte
-	w.svCache.totalCost = totalcost
-	w.svCache.fee = txFee
-	w.svCache.balanceAfter = newBalance
+	w.svCache.address = address
+	w.svCache.amount = amount
+	w.svCache.finalTx = nil
+	w.svCache.fee = 0
+	w.svCache.totalCost = 0
+	w.svCache.balanceAfter = 0
+	w.svCache.feeCalcID++
+	reqID := w.svCache.feeCalcID
 	w.svCache.finalTx = nil
 	w.mu.Unlock()
-	feeField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(txFee, 6)))
-	totalCostField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(totalcost, 6)))
-	newBalanceField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(newBalance, 6)))
+
+	placeholder := "[gray::]calculating..."
+	feeField.SetText(placeholder)
+	totalCostField.SetText(placeholder)
+	newBalanceField.SetText(placeholder)
+
+	go func(id uint64, addr chainutil.Address, amt chainutil.Amount) {
+		feeResp, feeErr := w.load.Wallet.Fee(addr, amt)
+
+		var (
+			txFee      chainutil.Amount
+			totalCost  chainutil.Amount
+			newBalance chainutil.Amount
+			lokiRate   uint64
+		)
+
+		if feeErr == nil {
+			txFee = chainutil.Amount(feeResp.FeeSat)
+			totalCost = amt + txFee
+			newBalance = w.load.GetBalance() - totalCost
+			lokiRate = feeResp.SatPerVbyte
+		}
+
+		w.load.Application.QueueUpdateDraw(func() {
+			w.mu.Lock()
+			if id != w.svCache.feeCalcID {
+				w.mu.Unlock()
+				return
+			}
+			if feeErr != nil {
+				w.svCache.lastErr = feeErr
+				w.svCache.fee = 0
+				w.svCache.totalCost = 0
+				w.svCache.balanceAfter = 0
+				w.mu.Unlock()
+				resetFields()
+				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", feeErr.Error()), time.Second*30)
+				return
+			}
+
+			w.svCache.lastErr = nil
+			w.svCache.fee = txFee
+			w.svCache.totalCost = totalCost
+			w.svCache.balanceAfter = newBalance
+			w.svCache.lokiPerVbyte = lokiRate
+			w.svCache.finalTx = nil
+			w.mu.Unlock()
+
+			feeField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(txFee, 6)))
+			totalCostField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(totalCost, 6)))
+			newBalanceField.SetText(fmt.Sprintf("[gray::]%s", shared.FormatAmountView(newBalance, 6)))
+		})
+	}(reqID, address, amount)
 }
 
 func (w *Wallet) closeModal() {
@@ -952,6 +1030,7 @@ func (w *Wallet) releasePreparedOutputs() {
 		w.mu.Unlock()
 
 		w.load.Logger.Info().Msg("released prepared outputs after cancelling transfer")
+		w.load.BroadcastBalanceRefresh()
 	}()
 }
 
@@ -1003,6 +1082,10 @@ func (w *Wallet) listenNewTransactions() {
 }
 
 func (w *Wallet) handleNotification(evt *load.NotificationEvent) {
+
+	if evt == nil {
+		return
+	}
 
 	switch evt.State {
 	case flnwallet.StatusReady, flnwallet.StatusTransaction, flnwallet.StatusBlock:
