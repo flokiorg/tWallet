@@ -18,6 +18,12 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+const (
+	unlockInstructions = "\nThis wallet is locked.\nEnter your passphrase to unlock it."
+	unlockingMessage   = "\nUnlocking wallet...\nPlease wait."
+	unlockedMessage    = "\nWallet unlocked!\nLoading..."
+)
+
 type Unlock struct {
 	*tview.Flex
 	load *load.Load
@@ -86,67 +92,29 @@ func (p *Unlock) showUnlockForm() {
 
 	p.load.Notif.CancelToast()
 
-	var isBusy bool
-
 	info := tview.NewTextView()
 	info.SetBackgroundColor(tcell.ColorDefault).SetBorderPadding(1, 1, 2, 2)
-	info.SetText("\nThis wallet is locked.\nEnter your passphrase to unlock it.")
+	info.SetText(unlockInstructions)
 
 	form := tview.NewForm()
 	form.SetBorderPadding(1, 1, 2, 3).SetBackgroundColor(tcell.ColorDefault)
-	form.AddPasswordField("Lock passphrase:", p.load.AppConfig.DefaultPassword, 0, '*', nil).
-		AddButton("Unlock", func() {
+	form.AddPasswordField("Lock passphrase:", p.load.AppConfig.DefaultPassword, 0, '*', nil)
 
-			go func() {
-				if isBusy {
-					return
-				}
-				isBusy = true
-				defer func() { isBusy = false }()
+	form.AddButton("Unlock", func() {
 
-				passInput := form.GetFormItem(0).(*tview.InputField)
-				p.load.Notif.CancelToast()
-				p.load.Notif.ShowToast("🔒 unlocking...")
+		unlockButton := form.GetButton(0)
+		passInput := form.GetFormItem(0).(*tview.InputField)
+		pass := passInput.GetText()
 
-				if err := p.load.Wallet.Unlock(passInput.GetText()); err != nil {
-					p.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
-					passInput.SetText(p.load.AppConfig.DefaultPassword)
-					p.load.Application.SetFocus(passInput)
-					return
-				}
+		p.load.Notif.CancelToast()
+		p.load.Notif.ShowToast("🔒 unlocking...")
 
-				sub := p.load.Wallet.Subscribe()
-				defer p.load.Wallet.Unsubscribe(sub)
-				for {
-					select {
-					case u := <-sub:
-						switch u.State {
+		info.SetText(unlockingMessage)
+		unlockButton.SetLabel("Loading...")
+		unlockButton.SetDisabled(true)
 
-						case flnwallet.StatusDown:
-							if u.Err != nil {
-								p.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", u.Err.Error()), time.Second*30)
-							}
-							return
-
-						case flnwallet.StatusReady, flnwallet.StatusSyncing:
-							p.load.Notif.ShowToastWithTimeout("🔓 Unlocked", time.Second*2)
-							p.load.QueueUpdateDraw(func() {
-								p.load.Go(shared.WALLET)
-							})
-							return
-
-						default:
-							continue
-						}
-
-					case <-time.After(time.Second * 20):
-						p.load.Notif.ShowToast("🔒 Unlock timed out. Try again.")
-						return
-					}
-				}
-			}()
-
-		})
+		go p.handleUnlock(pass, passInput, info, unlockButton)
+	})
 
 	view := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -160,4 +128,78 @@ func (p *Unlock) showUnlockForm() {
 
 	p.nav.ShowModal(components.NewModal(view, 50, 15, p.nav.CloseModal))
 
+}
+
+func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tview.TextView, unlockButton *tview.Button) {
+	err := p.load.Wallet.Unlock(pass)
+	if err != nil {
+		p.load.QueueUpdateDraw(func() {
+			p.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
+			passInput.SetText(p.load.AppConfig.DefaultPassword)
+			info.SetText(unlockInstructions)
+			unlockButton.SetLabel("Unlock")
+			unlockButton.SetDisabled(false)
+			p.load.Application.SetFocus(passInput)
+		})
+		return
+	}
+
+	sub := p.load.Wallet.Subscribe()
+	defer p.load.Wallet.Unsubscribe(sub)
+
+	timer := time.NewTimer(time.Second * 20)
+	defer timer.Stop()
+
+	for {
+		select {
+		case u, ok := <-sub:
+			if !ok || u == nil {
+				p.load.QueueUpdateDraw(func() {
+					info.SetText(unlockInstructions)
+					unlockButton.SetLabel("Unlock")
+					unlockButton.SetDisabled(false)
+					p.load.Notif.ShowToast("🔒 Unlock failed. Try again.")
+					p.load.Application.SetFocus(passInput)
+				})
+				return
+			}
+			switch u.State {
+			case flnwallet.StatusDown:
+				event := u
+				p.load.QueueUpdateDraw(func() {
+					if event.Err != nil {
+						p.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", event.Err.Error()), time.Second*30)
+					}
+					info.SetText(unlockInstructions)
+					unlockButton.SetLabel("Unlock")
+					unlockButton.SetDisabled(false)
+					p.load.Application.SetFocus(passInput)
+				})
+				return
+
+			case flnwallet.StatusReady, flnwallet.StatusSyncing, flnwallet.StatusUnlocked:
+				p.load.QueueUpdateDraw(func() {
+					p.load.Notif.ShowToastWithTimeout("🔓 Unlocked", time.Second*1)
+					info.SetText(unlockedMessage)
+					unlockButton.SetLabel("Unlock")
+					unlockButton.SetDisabled(false)
+					p.load.Go(shared.WALLET)
+				})
+				return
+
+			default:
+				continue
+			}
+
+		case <-timer.C:
+			p.load.QueueUpdateDraw(func() {
+				p.load.Notif.ShowToast("🔒 Unlock timed out. Try again.")
+				info.SetText(unlockInstructions)
+				unlockButton.SetLabel("Unlock")
+				unlockButton.SetDisabled(false)
+				p.load.Application.SetFocus(passInput)
+			})
+			return
+		}
+	}
 }

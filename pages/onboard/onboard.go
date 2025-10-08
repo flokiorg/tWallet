@@ -100,10 +100,15 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 		AddPasswordField("Confirm passphrase: ", p.load.AppConfig.DefaultPassword, 0, '*', nil).
 		AddButton("Restore", func() {
 
-			fromIndex, _ := form.GetFormItem(0).(*tview.DropDown).GetCurrentOption()
-			seedText := form.GetFormItem(1).(*tview.TextArea).GetText()
-			pass := form.GetFormItem(2).(*tview.InputField).GetText()
-			passConf := form.GetFormItem(3).(*tview.InputField).GetText()
+			dropdown := form.GetFormItem(0).(*tview.DropDown)
+			seedField := form.GetFormItem(1).(*tview.TextArea)
+			passField := form.GetFormItem(2).(*tview.InputField)
+			confField := form.GetFormItem(3).(*tview.InputField)
+
+			fromIndex, _ := dropdown.GetCurrentOption()
+			seedText := seedField.GetText()
+			pass := passField.GetText()
+			passConf := confField.GetText()
 
 			if err := p.validateFields(pass, passConf); err != nil {
 				p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
@@ -111,48 +116,7 @@ func (p *Onboard) buildRestoreForm() tview.Primitive {
 			}
 
 			p.showToast("⚡ restoring...")
-			go func() {
-
-				var err error
-				var phex string
-				var words []string
-				defer func() {
-					if err != nil {
-						p.load.QueueUpdateDraw(func() {
-							p.pages.SwitchToPage(RestoreView)
-							p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
-						})
-					}
-				}()
-
-				st := SeedType(fromIndex)
-				switch st {
-				case HEX:
-					phex = seedText
-					words, err = p.load.Wallet.RestoreByEncipheredSeed(phex, pass)
-
-				case MNEMONIC:
-					words = extractSeedWords(seedText)
-					phex, err = p.load.Wallet.RestoreByMnemonic(words, pass)
-
-				default:
-					err = fmt.Errorf("unexpected choise")
-					return
-				}
-
-				if err != nil {
-					err = fmt.Errorf("failed to restore: %v", err)
-					return
-				}
-
-				p.load.QueueUpdateDraw(func() {
-					if err := p.showCipherCard(phex, words); err != nil {
-						p.pages.SwitchToPage(RestoreView)
-						p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
-					}
-				})
-			}()
-
+			go p.restoreWallet(SeedType(fromIndex), seedText, pass)
 		})
 
 	flex := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -184,22 +148,7 @@ func (p *Onboard) buildNewWalletForm() tview.Primitive {
 			}
 
 			p.showToast("⚡ creating...")
-			go func() {
-
-				phex, words, err := p.load.Wallet.CreateWallet(pass)
-				p.load.QueueUpdateDraw(func() {
-					if err != nil {
-						p.pages.SwitchToPage(NewWalletView)
-						p.nav.ShowModal(components.ErrorModal(fmt.Sprintf("failed to create: %s", err.Error()), p.nav.CloseModal))
-						return
-					}
-					if err := p.showCipherCard(phex, words); err != nil {
-						p.pages.SwitchToPage(NewWalletView)
-						p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
-					}
-				})
-
-			}()
+			go p.createWallet(pass)
 		})
 
 	flex := tview.NewFlex().SetDirection(tview.FlexRow).
@@ -214,6 +163,60 @@ func (p *Onboard) buildNewWalletForm() tview.Primitive {
 		AddItem(tview.NewBox(), 0, 1, false)
 
 	return mainFlex
+}
+
+func (p *Onboard) restoreWallet(seedType SeedType, seedText, pass string) {
+	var (
+		words []string
+		phex  string
+		err   error
+	)
+
+	switch seedType {
+	case HEX:
+		phex = seedText
+		words, err = p.load.Wallet.RestoreByEncipheredSeed(phex, pass)
+
+	case MNEMONIC:
+		words = extractSeedWords(seedText)
+		phex, err = p.load.Wallet.RestoreByMnemonic(words, pass)
+
+	default:
+		err = fmt.Errorf("unexpected choice")
+	}
+
+	if err != nil {
+		err = fmt.Errorf("failed to restore: %v", err)
+	}
+
+	p.load.QueueUpdateDraw(func() {
+		if err != nil {
+			p.pages.SwitchToPage(RestoreView)
+			p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
+			return
+		}
+		if err := p.showCipherCard(phex, words); err != nil {
+			p.pages.SwitchToPage(RestoreView)
+			p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
+		}
+	})
+}
+
+func (p *Onboard) createWallet(pass string) {
+
+	phex, words, err := p.load.Wallet.CreateWallet(pass)
+
+	p.load.QueueUpdateDraw(func() {
+		if err != nil {
+			p.pages.SwitchToPage(NewWalletView)
+			p.nav.ShowModal(components.ErrorModal(fmt.Sprintf("failed to create: %s", err.Error()), p.nav.CloseModal))
+			return
+		}
+		if err := p.showCipherCard(phex, words); err != nil {
+			p.pages.SwitchToPage(NewWalletView)
+			p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
+		}
+	})
 }
 
 func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive, error) {

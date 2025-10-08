@@ -119,3 +119,69 @@ func (t *Table) Update(rows [][]string) {
 		t.ScrollToBeginning()
 	})
 }
+
+func (t *Table) ShowPlaceholder(message string) {
+	if len(t.columns) == 0 {
+		return
+	}
+
+	t.Clear()
+
+	t.UpdateTitle(0, false)
+	t.DrawHeaders()
+
+	placeholder := message
+
+	_, _, _, innerHeight := t.GetInnerRect()
+	if innerHeight <= 0 {
+		_, _, _, outerHeight := t.GetRect()
+		if outerHeight <= 0 {
+			outerHeight = 6
+		}
+		innerHeight = outerHeight - 2
+		if innerHeight <= 0 {
+			innerHeight = outerHeight
+		}
+	}
+	placeholderText := fmt.Sprintf("[gray::]%s", placeholder)
+
+	contentRows := innerHeight - 1
+	if contentRows < 1 {
+		contentRows = 1
+	}
+	placeholderRow := 1 + contentRows/2
+	if placeholderRow < 1 {
+		placeholderRow = 1
+	}
+	if t.maxRows > 0 && placeholderRow > t.maxRows {
+		placeholderRow = t.maxRows
+	}
+
+	blanks := func() *tview.TableCell {
+		return tview.NewTableCell("").
+			SetSelectable(false).
+			SetAlign(tview.AlignLeft).
+			SetExpansion(1)
+	}
+
+	for row := 1; row < placeholderRow; row++ {
+		for cid := range t.columns {
+			t.SetCell(row, cid, blanks())
+		}
+	}
+
+	centerCol := len(t.columns) / 2
+	for cid := range t.columns {
+		cell := blanks()
+		if cid == centerCol {
+			cell = tview.NewTableCell(placeholderText).
+				SetAlign(tview.AlignCenter).
+				SetExpansion(1).
+				SetSelectable(false)
+		}
+		t.SetCell(placeholderRow, cid, cell)
+	}
+
+	// Allow future updates to reposition the view at the top.
+	t.scrollOnce = sync.Once{}
+}

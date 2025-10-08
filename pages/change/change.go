@@ -102,48 +102,82 @@ func (c *Change) showChangeForm() {
 		AddPasswordField("Confirm passphrase:", c.load.AppConfig.DefaultPassword, 0, '*', nil).
 		AddButton("Cancel", c.closeModal).
 		AddButton("OK", func() {
-			go func() {
+			if isBusy {
+				return
+			}
 
-				if isBusy {
-					return
-				}
-				isBusy = true
+			oldPassField := form.GetFormItem(0).(*tview.InputField)
+			newPassField := form.GetFormItem(1).(*tview.InputField)
+			confirmField := form.GetFormItem(2).(*tview.InputField)
+
+			oldPass := oldPassField.GetText()
+			newPass := newPassField.GetText()
+			confirmPass := confirmField.GetText()
+
+			if err := c.validateOldPasswordField(oldPass); err != nil {
+				c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+				c.load.QueueUpdateDraw(func() { c.load.Application.SetFocus(oldPassField) })
+				return
+			}
+
+			if err := c.validateChangePasswordFields(newPass, confirmPass); err != nil {
+				c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
+				c.load.QueueUpdateDraw(func() { c.load.Application.SetFocus(oldPassField) })
+				return
+			}
+
+			isBusy = true
+			c.load.Notif.CancelToast()
+			c.load.Notif.ShowToast("🔒 updating...")
+
+			oldPassText := oldPass
+			newPassText := newPass
+			focusField := oldPassField
+
+			go func() {
 				defer func() { isBusy = false }()
 
-				c.load.Notif.CancelToast()
-				c.load.Notif.ShowToast("🔒 updating...")
-
-				oldPass := form.GetFormItem(0).(*tview.InputField)
-				pass := form.GetFormItem(1).(*tview.InputField)
-				passConf := form.GetFormItem(2).(*tview.InputField)
-
-				if err := c.validateOldPasswordField(oldPass.GetText()); err != nil {
+				if err := c.load.Wallet.ChangePassphrase(oldPassText, newPassText); err != nil {
 					c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
-					c.load.QueueUpdateDraw(func() { c.load.Application.SetFocus(oldPass) })
+					c.load.QueueUpdateDraw(func() { c.load.Application.SetFocus(focusField) })
 					return
 				}
 
-				if err := c.validateChangePasswordFields(pass.GetText(), passConf.GetText()); err != nil {
-					c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
-					c.load.QueueUpdateDraw(func() { c.load.Application.SetFocus(oldPass) })
-					return
-				}
-				if err := c.load.Wallet.ChangePassphrase(oldPass.GetText(), pass.GetText()); err != nil {
-					c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]error:[-:-:-] %s", err.Error()), time.Second*30)
-					c.load.QueueUpdateDraw(func() { c.load.Application.SetFocus(oldPass) })
-					return
-				}
 				sub := c.load.Wallet.Subscribe()
 				defer c.load.Wallet.Unsubscribe(sub)
+
+				timeout := time.NewTimer(time.Second * 20)
+				defer timeout.Stop()
+
+				resetTimeout := func() {
+					if !timeout.Stop() {
+						select {
+						case <-timeout.C:
+						default:
+						}
+					}
+					timeout.Reset(time.Second * 20)
+				}
+
 				for {
 					select {
-					case u := <-sub:
+					case u, ok := <-sub:
+						if !ok || u == nil {
+							c.load.QueueUpdateDraw(func() {
+								c.load.Notif.ShowToast("Timeout, try again.")
+								c.load.Application.SetFocus(focusField)
+							})
+							return
+						}
 						switch u.State {
-
 						case flnwallet.StatusDown:
-							if u.Err != nil {
-								c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", u.Err.Error()), time.Second*30)
-							}
+							event := u
+							c.load.QueueUpdateDraw(func() {
+								if event.Err != nil {
+									c.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", event.Err.Error()), time.Second*30)
+								}
+								c.load.Application.SetFocus(focusField)
+							})
 							return
 
 						case flnwallet.StatusReady, flnwallet.StatusSyncing:
@@ -154,16 +188,19 @@ func (c *Change) showChangeForm() {
 							return
 
 						default:
+							resetTimeout()
 							continue
 						}
 
-					case <-time.After(time.Second * 20):
-						c.load.Notif.ShowToast("Timeout, try again.")
+					case <-timeout.C:
+						c.load.QueueUpdateDraw(func() {
+							c.load.Notif.ShowToast("Timeout, try again.")
+							c.load.Application.SetFocus(focusField)
+						})
 						return
 					}
 				}
 			}()
-
 		})
 
 	view := tview.NewFlex().
