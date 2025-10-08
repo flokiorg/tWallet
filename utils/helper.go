@@ -19,7 +19,9 @@ import (
 func GetEnvOrFail(key string) string {
 	value, exists := os.LookupEnv(key)
 	if !exists {
-		log.Fatal().Msgf("Error: environment variable %s is not set", key)
+		log.Fatal().
+			Str("env", key).
+			Msg("environment variable not set")
 	}
 	return value
 }
@@ -31,7 +33,10 @@ func GetEnv[T any](key string, defaultValue T, parseFunc func(string) (T, error)
 	}
 	parsedValue, err := parseFunc(value)
 	if err != nil {
-		log.Warn().Msgf("Failed to parse %s, using default value. Error: %v\n", key, err)
+		log.Warn().
+			Str("env", key).
+			Err(err).
+			Msg("failed to parse environment override, using default value")
 		return defaultValue
 	}
 	return parsedValue

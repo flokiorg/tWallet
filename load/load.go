@@ -6,7 +6,6 @@ package load
 
 import (
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -15,11 +14,13 @@ import (
 	wlt "github.com/flokiorg/walletd/wallet"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/rivo/tview"
 
 	"github.com/flokiorg/flnd/flnwallet"
-	"github.com/flokiorg/twallet/load/config"
+	"github.com/flokiorg/twallet/config"
 	. "github.com/flokiorg/twallet/shared"
 )
 
@@ -53,14 +54,13 @@ type Load struct {
 }
 
 func NewLoad(cfg *config.AppConfig, flnsvc *flnwallet.Service, tapp *tview.Application, pages *tview.Pages) *Load {
-
-	logger := CreateFileLogger(filepath.Join(cfg.Walletdir, "twallet.log"))
+	logger := NamedLogger("load")
 
 	l := &Load{
 		Application: tapp,
 		Nav:         newNavigator(tapp, pages),
 		Wallet:      flnsvc,
-		Notif:       newNotification(flnsvc, logger),
+		Notif:       newNotification(flnsvc, NamedLogger("notification")),
 		Logger:      logger,
 		AppConfig:   cfg,
 		Cache:       &Cache{},
@@ -92,6 +92,7 @@ type notification struct {
 
 	healthState chan HealthState
 	lnHealth    <-chan *flnwallet.Update
+	wallet      *flnwallet.Service
 
 	lastHeight uint32
 }
@@ -100,15 +101,34 @@ type NotificationEvent struct {
 	AccountNotif   *wlt.AccountNotification
 	TxNotif        *wlt.TransactionNotifications
 	SpentNessNotif *wlt.SpentnessNotifications
+	State          flnwallet.Status
+	BlockHeight    uint32
+	Err            error
 }
 
-func (n *notification) Subscribe() <-chan *NotificationEvent {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+func (n *notification) Subscribe() (<-chan *NotificationEvent, func()) {
+	ch := make(chan *NotificationEvent, 1)
 
-	ch := make(chan *NotificationEvent)
+	n.mu.Lock()
 	n.subs = append(n.subs, ch)
-	return ch
+	n.mu.Unlock()
+
+	var once sync.Once
+	unsubscribe := func() {
+		once.Do(func() {
+			n.mu.Lock()
+			for i := range n.subs {
+				if n.subs[i] == ch {
+					n.subs = append(n.subs[:i], n.subs[i+1:]...)
+					break
+				}
+			}
+			n.mu.Unlock()
+			close(ch)
+		})
+	}
+
+	return ch, unsubscribe
 }
 
 func newNotification(flnsvc *flnwallet.Service, logger zerolog.Logger) *notification {
@@ -122,6 +142,7 @@ func newNotification(flnsvc *flnwallet.Service, logger zerolog.Logger) *notifica
 	}
 
 	n.lnHealth = flnsvc.Subscribe()
+	n.wallet = flnsvc
 
 	go n.listen()
 
@@ -158,19 +179,29 @@ func (n *notification) listen() {
 
 func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 
+	event := &NotificationEvent{
+		State:       ev.State,
+		BlockHeight: ev.BlockHeight,
+		Err:         ev.Err,
+	}
+
 	switch ev.State {
 	case flnwallet.StatusDown:
 		n.reportHealth(HealthState{Level: HealthRed, Info: "disconnected", Err: ev.Err})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusLocked:
 		n.reportHealth(HealthState{Level: HealthOrange, Info: "locked"})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusNone:
 		info := "connecting..."
 		n.reportHealth(HealthState{Level: HealthOrange, Info: info})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusNoWallet:
 		n.reportHealth(HealthState{Level: HealthOrange, Info: "no wallet"})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusSyncing:
 		var info string
@@ -180,31 +211,60 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 			info = fmt.Sprintf("syncing... (%d)", ev.BlockHeight)
 		}
 		n.reportHealth(HealthState{Level: HealthOrange, Info: info})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusUnlocked:
 		n.reportHealth(HealthState{Level: HealthGreen, Info: "unlocked"})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusReady:
-		info := fmt.Sprintf("ready (%d)", ev.BlockHeight)
-		n.logger.Debug().Msgf("wallet ready block: %v", ev.BlockHeight)
-		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
-		n.BroadcastWalletUpdate(&NotificationEvent{})
+		n.logger.Debug().
+			Uint32("block_height", ev.BlockHeight).
+			Msg("wallet ready event")
+		if n.ensureWalletResponsive() {
+			info := fmt.Sprintf("ready (%d)", ev.BlockHeight)
+			n.reportHealth(HealthState{Level: HealthGreen, Info: info})
+			n.BroadcastWalletUpdate(event)
+		} else {
+			n.logger.Warn().Msg("wallet ready reported but RPC still unavailable")
+			n.reportHealth(HealthState{Level: HealthOrange, Info: "waiting for wallet"})
+			n.ShowToast("[red:-:-]Error:[-:-:-] wallet not ready")
+		}
 
 	case flnwallet.StatusTransaction:
-		n.logger.Debug().Msgf("new tx height:%v amount:%v", ev.Transaction.BlockHeight, ev.Transaction.Amount)
-		n.BroadcastWalletUpdate(&NotificationEvent{})
+		if ev.Transaction != nil {
+			n.logger.Debug().
+				Uint32("block_height", uint32(ev.Transaction.BlockHeight)).
+				Int64("amount", ev.Transaction.Amount).
+				Str("tx_hash", ev.Transaction.TxHash).
+				Msg("transaction update received")
+		} else {
+			n.logger.Debug().Msg("transaction update received without payload")
+		}
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusBlock:
-		n.logger.Debug().Msgf("new block: %v", ev.BlockHeight)
+		n.logger.Debug().
+			Uint32("block_height", ev.BlockHeight).
+			Msg("new block notification")
 		n.lastHeight = ev.BlockHeight
 		info := fmt.Sprintf("ready (%d)", ev.BlockHeight)
 		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
+		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusScanning:
-		n.logger.Debug().Msgf("new sync block: %v", ev.BlockHeight)
-		percent := float64(ev.BlockHeight) / float64(ev.SyncedHeight) * 100
+		var percent float64
+		if ev.SyncedHeight > 0 {
+			percent = float64(ev.BlockHeight) / float64(ev.SyncedHeight) * 100
+		}
+		n.logger.Debug().
+			Uint32("block_height", ev.BlockHeight).
+			Uint32("synced_height", ev.SyncedHeight).
+			Float64("progress", percent).
+			Msg("wallet scanning update")
 		info := fmt.Sprintf("Scanning... %d (%.0f%%)", ev.SyncedHeight, percent)
 		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
+		n.BroadcastWalletUpdate(event)
 	}
 }
 
@@ -223,6 +283,7 @@ func (n *notification) Shutdown() {
 	for _, ch := range n.subs {
 		close(ch)
 	}
+	n.subs = nil
 }
 
 func (n *notification) Health() <-chan HealthState {
@@ -231,6 +292,42 @@ func (n *notification) Health() <-chan HealthState {
 
 func (n *notification) Toast() <-chan string {
 	return n.toast
+}
+
+func (n *notification) ensureWalletResponsive() bool {
+	const (
+		maxAttempts = 5
+		delay       = 300 * time.Millisecond
+	)
+
+	if n.wallet == nil {
+		return true
+	}
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		_, err := n.wallet.Balance()
+		if err == nil {
+			n.logger.Debug().Msg("wallet responsive confirmed")
+			return true
+		}
+
+		st, ok := status.FromError(err)
+		if ok {
+			switch st.Code() {
+			case codes.Unavailable, codes.DeadlineExceeded, codes.Canceled:
+				n.logger.Debug().Err(err).Msg("wallet RPC not ready yet")
+				time.Sleep(delay)
+				continue
+			}
+		}
+
+		n.logger.Error().Err(err).Msg("wallet balance failed")
+		n.ShowToast(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()))
+		return false
+	}
+
+	n.ShowToast("[red:-:-]Error:[-:-:-] wallet not ready")
+	return false
 }
 
 func (n *notification) ShowToast(text string) {

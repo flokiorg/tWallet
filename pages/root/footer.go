@@ -5,12 +5,10 @@
 package root
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
 	"github.com/flokiorg/twallet/load"
 	"github.com/gdamore/tcell/v2"
@@ -22,6 +20,7 @@ type Footer struct {
 	status     *components.Circle
 	statusText *tview.TextView
 	infoText   *tview.TextView
+	leftSide   *tview.TextView
 	destroy    chan struct{}
 }
 
@@ -38,24 +37,13 @@ func NewFooter(l *load.Load) *Footer {
 	f.status.SetColor(components.YELLOW)
 	f.statusText.SetBorderPadding(0, 0, 0, 2)
 
-	leftSide := tview.NewTextView()
-	leftSide.SetDynamicColors(true).
+	f.leftSide = tview.NewTextView()
+	f.leftSide.SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft).
 		SetBorderPadding(0, 0, 1, 1)
 
-	switch ev := f.load.Wallet.GetLastEvent(); ev.State {
-	case flnwallet.StatusLocked, flnwallet.StatusDown:
-		break
-
-	default:
-		if ok, err := f.load.Wallet.IsLocked(); !ok && !errors.Is(err, flnwallet.ErrDaemonNotRunning) {
-			fmt.Fprintf(leftSide, "[%s:-:b]<c> [white:-:-]Change Password ", tcell.ColorLightSkyBlue)
-			fmt.Fprintf(leftSide, "[%s:-:b]<l> [white:-:-]Lock Wallet", tcell.ColorLightSkyBlue)
-		}
-	}
-
 	f.SetRows(0).SetColumns(37, 0, 26, 3).
-		AddItem(leftSide, 0, 0, 1, 1, 0, 0, false).
+		AddItem(f.leftSide, 0, 0, 1, 1, 0, 0, false).
 		AddItem(f.infoText, 0, 1, 1, 1, 0, 0, false).
 		AddItem(f.statusText, 0, 2, 1, 1, 0, 0, false).
 		AddItem(f.status, 0, 3, 1, 1, 0, 0, false)
@@ -79,9 +67,14 @@ func (f *Footer) updates() {
 			case load.HealthGreen:
 				f.updateStatus(components.GREEN)
 				f.updateStatusText(hs.Info)
+				f.showShortcutView()
 
 			case load.HealthRed:
-				f.load.Logger.Trace().Msgf("health-err: %v", hs.Info)
+				logEntry := f.load.Logger.Error().Str("info", hs.Info)
+				if hs.Err != nil {
+					logEntry = logEntry.Err(hs.Err)
+				}
+				logEntry.Msg("wallet health degraded")
 				f.updateStatus(components.RED)
 				f.updateStatusText(hs.Info)
 				if hs.Err != nil {
@@ -89,7 +82,9 @@ func (f *Footer) updates() {
 				}
 
 			case load.HealthOrange:
-				f.load.Logger.Trace().Msgf("health-info: %v", hs.Info)
+				f.load.Logger.Warn().
+					Str("info", hs.Info).
+					Msg("wallet health warning")
 				f.updateStatus(components.YELLOW)
 				f.updateStatusText(hs.Info)
 
@@ -118,6 +113,10 @@ func (f *Footer) updateStatusText(notif string) {
 	f.load.Application.QueueUpdateDraw(func() {
 		f.statusText.SetText(notif)
 	})
+}
+
+func (f *Footer) showShortcutView() {
+	f.leftSide.SetText(fmt.Sprintf("[%s:-:-]<c> [gray:-:-]Change Password [%s:-:-]<l> [gray:-:-]Lock Wallet", tcell.ColorLightSkyBlue, tcell.ColorLightSkyBlue))
 }
 
 func (f *Footer) Destroy() {
