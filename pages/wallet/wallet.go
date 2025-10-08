@@ -41,6 +41,7 @@ type sendViewModel struct {
 	balanceAfter           chainutil.Amount
 	isSending              bool
 	isPreparing            bool
+	isReleasing            bool
 	lastErr                error
 	lokiPerVbyte           uint64
 	finalTx                *chainutil.Tx
@@ -551,7 +552,7 @@ func (w *Wallet) showTransfertView() {
 
 	view.AddItem(form, 0, 1, true)
 
-	w.nav.ShowModal(components.NewModal(view, 50, 22, w.nav.CloseModal))
+	w.nav.ShowModal(components.NewModal(view, 50, 22, w.closeModal))
 }
 
 func (w *Wallet) setFormDisabled(form *tview.Form, disabled bool) {
@@ -719,7 +720,7 @@ func (w *Wallet) showTransferConfirmation(address string, amount chainutil.Amoun
 	cView.AddItem(recap, 9, 1, false).
 		AddItem(cForm, 0, 1, true)
 
-	w.nav.ShowModal(components.NewModal(cView, 50, 22, w.nav.CloseModal))
+	w.nav.ShowModal(components.NewModal(cView, 50, 22, w.closeModal))
 }
 
 func (w *Wallet) showReceiveView() {
@@ -910,8 +911,40 @@ func (w *Wallet) transferAmountChanged(form *tview.Form) {
 
 func (w *Wallet) closeModal() {
 	w.load.Notif.CancelToast()
+	w.releasePreparedOutputs()
 	w.nav.CloseModal()
 	w.focusActiveView()
+}
+
+func (w *Wallet) releasePreparedOutputs() {
+	w.mu.Lock()
+	if w.svCache == nil || w.svCache.finalTx == nil || w.svCache.isSending || w.svCache.isPreparing || w.svCache.isReleasing {
+		w.mu.Unlock()
+		return
+	}
+	w.svCache.isReleasing = true
+	w.mu.Unlock()
+
+	go func() {
+		if err := w.load.Wallet.ReleaseOutputs(); err != nil {
+			w.load.Logger.Warn().Err(err).Msg("failed to release prepared outputs")
+
+			w.mu.Lock()
+			w.svCache.isReleasing = false
+			w.mu.Unlock()
+
+			w.load.Application.QueueUpdateDraw(func() {
+				w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] failed to release outputs: %s", err.Error()), time.Second*15)
+			})
+			return
+		}
+
+		w.mu.Lock()
+		w.svCache = &sendViewModel{}
+		w.mu.Unlock()
+
+		w.load.Logger.Info().Msg("released prepared outputs after cancelling transfer")
+	}()
 }
 
 func (w *Wallet) fetchTransactionsRows() [][]string {
