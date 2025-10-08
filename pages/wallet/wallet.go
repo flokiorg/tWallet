@@ -45,6 +45,7 @@ type sendViewModel struct {
 	lastErr                error
 	lokiPerVbyte           uint64
 	finalTx                *chainutil.Tx
+	locks                  []*flnwallet.OutputLock
 }
 
 type walletView int
@@ -570,6 +571,7 @@ func (w *Wallet) setFormDisabled(form *tview.Form, disabled bool) {
 func (w *Wallet) prepareTransfer(address chainutil.Address, amount chainutil.Amount) error {
 	w.mu.Lock()
 	w.svCache.finalTx = nil
+	w.svCache.locks = nil
 	w.mu.Unlock()
 
 	feeResp, err := w.load.Wallet.Fee(address, amount)
@@ -585,13 +587,16 @@ func (w *Wallet) prepareTransfer(address chainutil.Address, amount chainutil.Amo
 		address.String(): int64(amount),
 	}
 
-	packet, err := w.load.Wallet.FundPsbt(entry, feeResp.SatPerVbyte)
+	funded, err := w.load.Wallet.FundPsbt(entry, feeResp.SatPerVbyte)
 	if err != nil {
 		return err
 	}
 
-	finalTx, err := w.load.Wallet.FinalizePsbt(packet)
+	finalTx, err := w.load.Wallet.FinalizePsbt(funded.Packet)
 	if err != nil {
+		if err := w.load.Wallet.ReleaseOutputs(funded.Locks); err != nil {
+			w.load.Logger.Warn().Err(err).Msg("failed to release outputs after finalize failure")
+		}
 		return err
 	}
 
@@ -603,6 +608,7 @@ func (w *Wallet) prepareTransfer(address chainutil.Address, amount chainutil.Amo
 	w.svCache.balanceAfter = newBalance
 	w.svCache.lokiPerVbyte = feeResp.SatPerVbyte
 	w.svCache.finalTx = finalTx
+	w.svCache.locks = funded.Locks
 	w.svCache.lastErr = nil
 	w.mu.Unlock()
 
@@ -918,15 +924,16 @@ func (w *Wallet) closeModal() {
 
 func (w *Wallet) releasePreparedOutputs() {
 	w.mu.Lock()
-	if w.svCache == nil || w.svCache.finalTx == nil || w.svCache.isSending || w.svCache.isPreparing || w.svCache.isReleasing {
+	if w.svCache == nil || len(w.svCache.locks) == 0 || w.svCache.isSending || w.svCache.isPreparing || w.svCache.isReleasing {
 		w.mu.Unlock()
 		return
 	}
 	w.svCache.isReleasing = true
+	locks := w.svCache.locks
 	w.mu.Unlock()
 
 	go func() {
-		if err := w.load.Wallet.ReleaseOutputs(); err != nil {
+		if err := w.load.Wallet.ReleaseOutputs(locks); err != nil {
 			w.load.Logger.Warn().Err(err).Msg("failed to release prepared outputs")
 
 			w.mu.Lock()
@@ -941,6 +948,7 @@ func (w *Wallet) releasePreparedOutputs() {
 
 		w.mu.Lock()
 		w.svCache = &sendViewModel{}
+		w.svCache.isReleasing = false
 		w.mu.Unlock()
 
 		w.load.Logger.Info().Msg("released prepared outputs after cancelling transfer")
