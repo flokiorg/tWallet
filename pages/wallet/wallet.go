@@ -668,14 +668,10 @@ func (w *Wallet) showTransferConfirmation(address string, amount chainutil.Amoun
 		AddButton("Cancel", w.closeModal).
 		AddButton("Send", func() {
 			sendIdx := cForm.GetButtonIndex("Send")
-			cancelIdx := cForm.GetButtonIndex("Cancel")
 
-			var sendBtn, cancelBtn *tview.Button
+			var sendBtn *tview.Button
 			if sendIdx >= 0 {
 				sendBtn = cForm.GetButton(sendIdx)
-			}
-			if cancelIdx >= 0 {
-				cancelBtn = cForm.GetButton(cancelIdx)
 			}
 
 			w.mu.Lock()
@@ -694,18 +690,14 @@ func (w *Wallet) showTransferConfirmation(address string, amount chainutil.Amoun
 				w.load.Notif.ShowToastWithTimeout("[red:-:-]Error:[-:-:-] transaction not ready", time.Second*30)
 				if sendBtn != nil {
 					sendBtn.SetDisabled(false)
-				}
-				if cancelBtn != nil {
-					cancelBtn.SetDisabled(false)
+					sendBtn.SetLabel("Send")
 				}
 				return
 			}
 
 			if sendBtn != nil {
 				sendBtn.SetDisabled(true)
-			}
-			if cancelBtn != nil {
-				cancelBtn.SetDisabled(true)
+				sendBtn.SetLabel("Sending...")
 			}
 
 			go func(tx *chainutil.Tx) {
@@ -732,9 +724,7 @@ func (w *Wallet) showTransferConfirmation(address string, amount chainutil.Amoun
 					if err != nil {
 						if sendBtn != nil {
 							sendBtn.SetDisabled(false)
-						}
-						if cancelBtn != nil {
-							cancelBtn.SetDisabled(false)
+							sendBtn.SetLabel("Send")
 						}
 						w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 						return
