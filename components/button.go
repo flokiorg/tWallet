@@ -20,6 +20,9 @@ type SwitchButton struct {
 	TextView      *tview.TextView
 	ActiveColor   tcell.Color
 	InactiveColor tcell.Color
+	ActiveText    tcell.Color
+	InactiveText  tcell.Color
+	active        bool
 }
 
 func NewSwitchButton(id int, label string, active bool) *SwitchButton {
@@ -30,6 +33,9 @@ func NewSwitchButton(id int, label string, active bool) *SwitchButton {
 		Label:         label,
 		ActiveColor:   tcell.ColorOrange,
 		InactiveColor: tcell.ColorGray,
+		ActiveText:    tcell.ColorOrange,
+		InactiveText:  tcell.ColorWhite,
+		active:        active,
 	}
 	b.TextView.SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter).
@@ -44,14 +50,40 @@ func NewSwitchButton(id int, label string, active bool) *SwitchButton {
 }
 
 func (b *SwitchButton) SetActive(active bool) {
+	b.active = active
 	if active {
-		b.TextView.SetText(fmt.Sprintf("[orange::b]%s", b.Label)).
-			SetBorderColor(b.ActiveColor)
+		b.TextView.SetText(b.Label)
+		b.TextView.SetTextStyle(tcell.StyleDefault.Foreground(b.ActiveText).Bold(true))
+		b.TextView.SetBorderColor(b.ActiveColor)
 	} else {
-		b.TextView.SetText(fmt.Sprintf("[white::]%s", b.Label)).
-			SetBorderColor(b.InactiveColor)
+		b.TextView.SetText(b.Label)
+		b.TextView.SetTextStyle(tcell.StyleDefault.Foreground(b.InactiveText).Bold(false))
+		b.TextView.SetBorderColor(b.InactiveColor)
 	}
 
+}
+
+// SetBackgroundColor updates the background color for the button container and content.
+func (b *SwitchButton) SetBackgroundColor(color tcell.Color) {
+	b.Grid.SetBackgroundColor(color)
+	b.TextView.SetBackgroundColor(color)
+}
+
+// SetColors updates active/inactive border and text colors.
+func (b *SwitchButton) SetColors(activeBorder, inactiveBorder, activeText, inactiveText tcell.Color) {
+	if activeBorder != tcell.ColorDefault {
+		b.ActiveColor = activeBorder
+	}
+	if inactiveBorder != tcell.ColorDefault {
+		b.InactiveColor = inactiveBorder
+	}
+	if activeText != tcell.ColorDefault {
+		b.ActiveText = activeText
+	}
+	if inactiveText != tcell.ColorDefault {
+		b.InactiveText = inactiveText
+	}
+	b.SetActive(b.active)
 }
 
 type ConfirmButton struct {

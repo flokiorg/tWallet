@@ -13,19 +13,70 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+type SwitchStyle struct {
+	ButtonWidth           int
+	GapWidth              int
+	SidePadding           int
+	RowPadding            int
+	BackgroundColor       tcell.Color
+	ButtonBackgroundColor tcell.Color
+	ActiveBorderColor     tcell.Color
+	InactiveBorderColor   tcell.Color
+	ActiveTextColor       tcell.Color
+	InactiveTextColor     tcell.Color
+}
+
+func (s SwitchStyle) normalized() SwitchStyle {
+	style := s
+	if style.ButtonWidth <= 0 {
+		style.ButtonWidth = 18
+	}
+	if style.GapWidth < 0 {
+		style.GapWidth = 0
+	}
+	if style.SidePadding < 0 {
+		style.SidePadding = 0
+	}
+	if style.RowPadding < 0 {
+		style.RowPadding = 0
+	}
+	return style
+}
+
+func DefaultSwitchStyle() SwitchStyle {
+	return SwitchStyle{
+		ButtonWidth:           18,
+		GapWidth:              2,
+		SidePadding:           2,
+		RowPadding:            1,
+		BackgroundColor:       tcell.ColorDefault,
+		ButtonBackgroundColor: tcell.ColorDefault,
+		ActiveBorderColor:     tcell.ColorOrange,
+		InactiveBorderColor:   tcell.ColorGray,
+		ActiveTextColor:       tcell.ColorOrange,
+		InactiveTextColor:     tcell.ColorWhite,
+	}
+}
+
 type Switch struct {
 	*tview.Grid
 	nav      *load.Navigator
 	button1  *SwitchButton
 	button2  *SwitchButton
 	onSelect func(int)
+	style    SwitchStyle
 }
 
 func NewSwitch(nav *load.Navigator, label1, label2 string, selectedIndex int, onSelect func(selectedIndex int)) *Switch {
+	return NewSwitchWithStyle(nav, label1, label2, selectedIndex, DefaultSwitchStyle(), onSelect)
+}
 
+func NewSwitchWithStyle(nav *load.Navigator, label1, label2 string, selectedIndex int, style SwitchStyle, onSelect func(selectedIndex int)) *Switch {
 	if selectedIndex != 0 && selectedIndex != 1 {
 		log.Fatal("unexpected index")
 	}
+
+	style = style.normalized()
 
 	s := &Switch{
 		Grid:     tview.NewGrid(),
@@ -33,12 +84,38 @@ func NewSwitch(nav *load.Navigator, label1, label2 string, selectedIndex int, on
 		button2:  NewSwitchButton(1, label2, false),
 		onSelect: onSelect,
 		nav:      nav,
+		style:    style,
 	}
 
-	s.Grid.SetRows(1).SetColumns(5, 0, 5)
-	s.Grid.AddItem(s.button1, 1, 1, 1, 1, 0, 0, true).
-		AddItem(tview.NewBox(), 1, 2, 1, 1, 0, 0, false).
-		AddItem(s.button2, 1, 3, 1, 1, 0, 0, false)
+	columns := []int{style.SidePadding, style.ButtonWidth, style.GapWidth, style.ButtonWidth, style.SidePadding}
+	rows := []int{style.RowPadding, 0, style.RowPadding}
+	s.Grid.SetRows(rows...).SetColumns(columns...)
+
+	padBox := func() *tview.Box {
+		b := tview.NewBox()
+		if style.BackgroundColor != tcell.ColorDefault {
+			b.SetBackgroundColor(style.BackgroundColor)
+		}
+		return b
+	}
+
+	if style.BackgroundColor != tcell.ColorDefault {
+		s.Grid.SetBackgroundColor(style.BackgroundColor)
+	}
+
+	if style.ButtonBackgroundColor != tcell.ColorDefault {
+		s.button1.SetBackgroundColor(style.ButtonBackgroundColor)
+		s.button2.SetBackgroundColor(style.ButtonBackgroundColor)
+	}
+	s.button1.SetColors(style.ActiveBorderColor, style.InactiveBorderColor, style.ActiveTextColor, style.InactiveTextColor)
+	s.button2.SetColors(style.ActiveBorderColor, style.InactiveBorderColor, style.ActiveTextColor, style.InactiveTextColor)
+
+	s.Grid.AddItem(padBox(), 0, 0, 1, len(columns), 0, 0, false)
+	s.Grid.AddItem(s.button1, 1, 1, 1, 1, 0, 0, true)
+	gapBox := padBox()
+	s.Grid.AddItem(gapBox, 1, 2, 1, 1, 0, 0, false)
+	s.Grid.AddItem(s.button2, 1, 3, 1, 1, 0, 0, false)
+	s.Grid.AddItem(padBox(), 2, 0, 1, len(columns), 0, 0, false)
 
 	keyCapture := func(active, inactive *SwitchButton) func(*tcell.EventKey) *tcell.EventKey {
 		return func(ev *tcell.EventKey) *tcell.EventKey {
