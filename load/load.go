@@ -5,7 +5,10 @@
 package load
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -60,11 +63,12 @@ func NewLoad(cfg *config.AppConfig, flnsvc *flnwallet.Service, tapp *tview.Appli
 		Application: tapp,
 		Nav:         newNavigator(tapp, pages),
 		Wallet:      flnsvc,
-		Notif:       newNotification(flnsvc, NamedLogger("notification")),
 		Logger:      logger,
 		AppConfig:   cfg,
 		Cache:       &Cache{},
 	}
+
+	l.Notif = newNotification(flnsvc, l.Cache, NamedLogger("notification"))
 
 	l.Application.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() != tcell.KeyESC {
@@ -93,8 +97,7 @@ type notification struct {
 	healthState chan HealthState
 	lnHealth    <-chan *flnwallet.Update
 	wallet      *flnwallet.Service
-
-	lastHeight uint32
+	cache       *Cache
 }
 
 type NotificationEvent struct {
@@ -104,6 +107,11 @@ type NotificationEvent struct {
 	State          flnwallet.Status
 	BlockHeight    uint32
 	Err            error
+}
+
+type RecoveryStatus struct {
+	Info      *lnrpc.GetRecoveryInfoResponse
+	UTXOCount int
 }
 
 func (n *notification) Subscribe() (<-chan *NotificationEvent, func()) {
@@ -131,13 +139,13 @@ func (n *notification) Subscribe() (<-chan *NotificationEvent, func()) {
 	return ch, unsubscribe
 }
 
-func newNotification(flnsvc *flnwallet.Service, logger zerolog.Logger) *notification {
+func newNotification(flnsvc *flnwallet.Service, cache *Cache, logger zerolog.Logger) *notification {
 	n := &notification{
-		toast:  make(chan string, 5),
-		subs:   make([]chan *NotificationEvent, 0),
-		stop:   make(chan struct{}),
-		logger: logger,
-
+		toast:       make(chan string, 5),
+		subs:        make([]chan *NotificationEvent, 0),
+		stop:        make(chan struct{}),
+		logger:      logger,
+		cache:       cache,
 		healthState: make(chan HealthState),
 	}
 
@@ -234,6 +242,7 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 			Msg("wallet ready event")
 		if n.ensureWalletResponsive() {
 			info := fmt.Sprintf("ready (%d)", ev.BlockHeight)
+			n.cache.updateTip(int32(ev.BlockHeight))
 			n.reportHealth(HealthState{Level: HealthGreen, Info: info})
 			n.BroadcastWalletUpdate(event)
 		} else {
@@ -252,30 +261,31 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 		} else {
 			n.logger.Debug().Msg("transaction update received without payload")
 		}
+		n.cache.updateTip(ev.Transaction.BlockHeight)
 		n.BroadcastWalletUpdate(event)
 
 	case flnwallet.StatusBlock:
 		n.logger.Debug().
 			Uint32("block_height", ev.BlockHeight).
 			Msg("new block notification")
-		n.lastHeight = ev.BlockHeight
 		info := fmt.Sprintf("ready (%d)", ev.BlockHeight)
+		n.cache.updateTip(int32(ev.BlockHeight))
 		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusScanning:
-		var percent float64
-		if ev.SyncedHeight > 0 {
-			percent = float64(ev.BlockHeight) / float64(ev.SyncedHeight) * 100
-		}
-		n.logger.Debug().
-			Uint32("block_height", ev.BlockHeight).
-			Uint32("synced_height", ev.SyncedHeight).
-			Float64("progress", percent).
-			Msg("wallet scanning update")
-		info := fmt.Sprintf("Scanning... %d (%.0f%%)", ev.SyncedHeight, percent)
-		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
-		n.BroadcastWalletUpdate(event)
+		// case flnwallet.StatusScanning:
+		// 	var percent float64
+		// 	if ev.SyncedHeight > 0 {
+		// 		percent = float64(ev.BlockHeight) / float64(ev.SyncedHeight) * 100
+		// 	}
+		// 	n.logger.Debug().
+		// 		Uint32("block_height", ev.BlockHeight).
+		// 		Uint32("synced_height", ev.SyncedHeight).
+		// 		Float64("progress", percent).
+		// 		Msg("wallet scanning update")
+		// 	info := fmt.Sprintf("Scanning... %d (%.0f%%)", ev.SyncedHeight, percent)
+		// 	n.reportHealth(HealthState{Level: HealthGreen, Info: info})
+		// 	n.BroadcastWalletUpdate(event)
 	}
 }
 
@@ -364,19 +374,84 @@ func (n *notification) ShowToastWithTimeout(text string, d time.Duration) {
 }
 
 type Cache struct {
-	balance chainutil.Amount
-	mu      sync.Mutex
+	lockedBalance      chainutil.Amount
+	confirmedBalance   chainutil.Amount
+	unconfirmedBalance chainutil.Amount
+	tipHeight          int32
+	mu                 sync.Mutex
 }
 
-func (c *Cache) SetBalance(resp *lnrpc.WalletBalanceResponse) {
+func (c *Cache) SetBalance(confirmedBalance, unconfirmedBalance, lockedBalance chainutil.Amount) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.balance = chainutil.Amount(resp.TotalBalance)
+	c.confirmedBalance = chainutil.Amount(confirmedBalance)
+	c.lockedBalance = chainutil.Amount(lockedBalance)
+	c.unconfirmedBalance = chainutil.Amount(unconfirmedBalance)
 }
 
-func (c *Cache) GetBalance() chainutil.Amount {
+func (c *Cache) GetBalance() (chainutil.Amount, chainutil.Amount, chainutil.Amount) {
 	c.mu.Lock()
-	balance := c.balance
+	defer c.mu.Unlock()
+
+	return c.confirmedBalance, c.unconfirmedBalance, c.lockedBalance
+}
+
+func (c *Cache) updateTip(height int32) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if height > c.tipHeight {
+		c.tipHeight = height
+	}
+}
+
+func (c *Cache) GetTipHeight() int32 {
+	c.mu.Lock()
+	tip := c.tipHeight
 	c.mu.Unlock()
-	return balance
+
+	return tip
+}
+
+func (l *Load) GetRecoveryStatus() (*RecoveryStatus, error) {
+	info, err := l.Wallet.GetRecoveryInfo()
+	if err != nil {
+		return nil, err
+	}
+	utxos, err := l.Wallet.ListUnspent(0, math.MaxInt32)
+	if err != nil {
+		return nil, err
+	}
+	return &RecoveryStatus{Info: info, UTXOCount: len(utxos)}, nil
+}
+
+func (l *Load) MonitorRecovery(ctx context.Context, interval time.Duration, cb func(*RecoveryStatus) bool) (*RecoveryStatus, error) {
+	if interval <= 0 {
+		interval = time.Second
+	}
+	for {
+		status, err := l.GetRecoveryStatus()
+		if err != nil {
+			if errors.Is(err, flnwallet.ErrDaemonNotRunning) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(interval):
+					continue
+				}
+			}
+			return nil, err
+		}
+		cont := true
+		if cb != nil {
+			cont = cb(status)
+		}
+		if !cont || status.Info == nil || status.Info.GetRecoveryFinished() || status.Info.GetProgress() >= 1 {
+			return status, nil
+		}
+		select {
+		case <-ctx.Done():
+			return status, ctx.Err()
+		case <-time.After(interval):
+		}
+	}
 }

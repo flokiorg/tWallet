@@ -5,11 +5,14 @@
 package onboard
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rivo/tview"
 
+	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
@@ -31,7 +34,8 @@ type Onboard struct {
 	view      string
 	switchBtn *components.Switch
 
-	pages *tview.Pages
+	pages     *tview.Pages
+	restoring bool
 }
 
 func NewPage(l *load.Load) *Onboard {
@@ -193,11 +197,14 @@ func (p *Onboard) restoreWallet(seedType SeedType, seedText, pass string) {
 		if err != nil {
 			p.pages.SwitchToPage(RestoreView)
 			p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
+			p.restoring = false
 			return
 		}
+		p.restoring = true
 		if err := p.showCipherCard(phex, words); err != nil {
 			p.pages.SwitchToPage(RestoreView)
 			p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
+			p.restoring = false
 		}
 	})
 }
@@ -212,6 +219,7 @@ func (p *Onboard) createWallet(pass string) {
 			p.nav.ShowModal(components.ErrorModal(fmt.Sprintf("failed to create: %s", err.Error()), p.nav.CloseModal))
 			return
 		}
+		p.restoring = false
 		if err := p.showCipherCard(phex, words); err != nil {
 			p.pages.SwitchToPage(NewWalletView)
 			p.nav.ShowModal(components.ErrorModal(err.Error(), p.nav.CloseModal))
@@ -228,11 +236,16 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 			p.pages.SwitchToPage(CipherView)
 		}
 		p.nav.ShowModal(components.NewDialog("confirm?", "Your mnemonic is NOT saved in the database and CANNOT be restored. Make sure to save it securely.", cancel, []string{"Cancel", "Risk Accepted"}, cancel, func() {
-			go func() {
-				p.load.QueueUpdateDraw(func() {
-					p.load.Go(shared.WALLET)
-				})
-			}()
+			p.nav.CloseModal()
+			if p.restoring {
+				go p.monitorRestoreRecovery()
+			} else {
+				go func() {
+					p.load.QueueUpdateDraw(func() {
+						p.load.Go(shared.WALLET)
+					})
+				}()
+			}
 		}))
 	})
 	cipherCard, height, err := components.NewCipher(p.load, words, phex)
@@ -254,6 +267,110 @@ func (p *Onboard) buildCipherCard(phex string, words []string) (tview.Primitive,
 		AddItem(grid, height+5, 0, true).
 		AddItem(tview.NewBox(), 0, 1, false)
 	return container, nil
+}
+
+func (p *Onboard) monitorRestoreRecovery() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	update := func(status *load.RecoveryStatus) bool {
+		msg := fmt.Sprintf("⏳ Recovery in progress… [%d] UTXO recovered\n%.2f%% complete", status.UTXOCount, status.Info.Progress*100)
+		p.load.QueueUpdateDraw(func() {
+			p.showToast(msg)
+		})
+		return true
+	}
+
+	p.load.QueueUpdateDraw(func() {
+		p.showToast("⌛ Waiting for wallet RPC to be ready…")
+	})
+
+	if err := p.waitForWalletRPC(ctx); err != nil {
+		p.restoring = false
+		p.load.QueueUpdateDraw(func() {
+			msg := fmt.Sprintf("recovery failed: %v\nPress Ctrl+C to exit if stuck.", err)
+			p.nav.ShowModal(components.ErrorModal(msg, p.nav.CloseModal))
+		})
+		return
+	}
+
+	status, err := p.load.MonitorRecovery(ctx, time.Second, update)
+	p.restoring = false
+	if err != nil {
+		p.load.QueueUpdateDraw(func() {
+			msg := fmt.Sprintf("recovery failed: %v\nPress Ctrl+C to exit if stuck.", err)
+			p.nav.ShowModal(components.ErrorModal(msg, p.nav.CloseModal))
+		})
+		return
+	}
+
+	finalCount := 0
+	if status != nil {
+		finalCount = status.UTXOCount
+	}
+
+	p.load.QueueUpdateDraw(func() {
+		p.showToast(fmt.Sprintf("✅ Recovery complete! [%d] UTXO recovered\n⌛ Waiting for wallet RPC to be ready…", finalCount))
+	})
+
+	if err := p.waitForWalletReady(ctx); err != nil {
+		p.load.QueueUpdateDraw(func() {
+			msg := fmt.Sprintf("wallet not ready after recovery: %v\nPress Ctrl+C to exit if stuck.", err)
+			p.nav.ShowModal(components.ErrorModal(msg, p.nav.CloseModal))
+		})
+		return
+	}
+
+	p.load.QueueUpdateDraw(func() {
+		p.load.Go(shared.WALLET)
+	})
+}
+
+func (p *Onboard) waitForWalletReady(ctx context.Context) error {
+	sub := p.load.Wallet.Subscribe()
+	defer p.load.Wallet.Unsubscribe(sub)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case update, ok := <-sub:
+			if !ok || update == nil {
+				return fmt.Errorf("wallet subscription closed while waiting for RPC ready")
+			}
+			if update.State == flnwallet.StatusReady {
+				return nil
+			}
+			if update.State == flnwallet.StatusDown && update.Err != nil {
+				return update.Err
+			}
+		}
+	}
+}
+
+func (p *Onboard) waitForWalletRPC(ctx context.Context) error {
+	sub := p.load.Wallet.Subscribe()
+	defer p.load.Wallet.Unsubscribe(sub)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case update, ok := <-sub:
+			if !ok || update == nil {
+				return fmt.Errorf("wallet subscription closed while waiting for RPC")
+			}
+
+			switch update.State {
+			case flnwallet.StatusReady, flnwallet.StatusBlock, flnwallet.StatusTransaction, flnwallet.StatusSyncing:
+				return nil
+			case flnwallet.StatusDown:
+				if update.Err != nil {
+					return update.Err
+				}
+			}
+		}
+	}
 }
 
 func (p *Onboard) validateFields(pass, passConf string) error {
