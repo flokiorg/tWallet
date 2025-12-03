@@ -11,7 +11,6 @@ import (
 	"github.com/rivo/tview"
 
 	"github.com/flokiorg/flnd/flnwallet"
-	"github.com/flokiorg/flnd/lnrpc"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/twallet/load"
 	. "github.com/flokiorg/twallet/shared"
@@ -161,14 +160,16 @@ func (h *Header) refreshBalance() {
 	if h.balance == nil {
 		return
 	}
+	var confirmed, unconfirmed, locked chainutil.Amount
 	balance, err := h.load.Wallet.Balance()
 	if err != nil {
 		h.load.Logger.Warn().Err(err).Msg("unable to fetch balance")
-		h.showBalanceStatus("Balance unavailable.", tcell.ColorRed)
-		return
+		confirmed, unconfirmed, locked = h.load.GetBalance()
+	} else {
+		confirmed, unconfirmed, locked = chainutil.Amount(balance.ConfirmedBalance), chainutil.Amount(balance.UnconfirmedBalance), chainutil.Amount(balance.LockedBalance)
 	}
 
-	h.updateBalance(balance)
+	h.updateBalance(confirmed, unconfirmed, locked)
 }
 
 func (h *Header) showBalanceStatus(message string, color tcell.Color) {
@@ -196,15 +197,16 @@ func (h *Header) Destroy() {
 	}
 }
 
-func (h *Header) updateBalance(resp *lnrpc.WalletBalanceResponse) {
+func (h *Header) updateBalance(confirmed, unconfirmed, locked chainutil.Amount) {
 	h.load.Logger.Debug().
-		Int64("confirmed", resp.ConfirmedBalance).
-		Int64("unconfirmed", resp.UnconfirmedBalance).
+		Int64("confirmed", int64(confirmed)).
+		Int64("unconfirmed", int64(unconfirmed)).
+		Int64("locked", int64(locked)).
 		Msg("balance updated")
-	h.load.Cache.SetBalance(resp)
+	h.load.Cache.SetBalance(confirmed, unconfirmed, locked)
 	h.load.Application.QueueUpdateDraw(func() {
 		h.status = ""
-		h.balance.SetText(balanceView(resp))
+		h.balance.SetText(balanceView(confirmed, unconfirmed, locked))
 	})
 }
 
@@ -236,6 +238,9 @@ func buildLogShortcutView() *tview.TextView {
 		SetBorderPadding(0, 0, 1, 1)
 
 	fmt.Fprintf(shortcuts, "\n[%s:-:-]<ctrl+t>[gray:-:-] Transactions\n", accent)
+	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+a>[gray:-:-] Addresses\n", accent)
+	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+s>[gray:-:-] Sign & Verify\n", accent)
+	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+x>[gray:-:-] Resync\n", accent)
 	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+l>[gray:-:-] Logs", accent)
 
 	return shortcuts
@@ -255,36 +260,21 @@ func buildSendReceiveView() *tview.TextView {
 	return hotkeys
 }
 
-func buildShortcutWrapper(content tview.Primitive) *tview.Flex {
-	left := tview.NewBox()
-	right := tview.NewBox()
-	wrap := tview.NewFlex()
-	wrap.AddItem(left, 0, 1, false).
-		AddItem(content, 0, 2, false).
-		AddItem(right, 0, 1, false)
-	return wrap
-}
+func balanceView(confirmedBalance, unconfirmedBalance, lockedBalance chainutil.Amount) string {
 
-func balanceView(balance *lnrpc.WalletBalanceResponse) string {
-	if balance == nil {
-		return fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, DefaultBalanceView)
-	}
-	strBalance := fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(balance.ConfirmedBalance), 6))
+	strBalance := fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(confirmedBalance), 6))
 
-	locked := balance.LockedBalance
-	unconfirmed := balance.UnconfirmedBalance
-
-	if locked > 0 && unconfirmed > 0 {
-		total := locked + unconfirmed
+	if lockedBalance > 0 && unconfirmedBalance > 0 {
+		total := lockedBalance + unconfirmedBalance
 		strBalance += fmt.Sprintf("[-:-:-]Pending: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(total), 6))
 		return strBalance
 	}
 
-	if unconfirmed > 0 || locked == 0 {
-		strBalance += fmt.Sprintf("[-:-:-]Unconfirmed: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(unconfirmed), 6))
+	if unconfirmedBalance > 0 || lockedBalance == 0 {
+		strBalance += fmt.Sprintf("[-:-:-]Unconfirmed: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(unconfirmedBalance), 6))
 	}
-	if locked > 0 {
-		strBalance += fmt.Sprintf("[-:-:-]Locked: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(locked), 6))
+	if lockedBalance > 0 {
+		strBalance += fmt.Sprintf("[-:-:-]Locked: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(lockedBalance), 6))
 	}
 
 	return strBalance
