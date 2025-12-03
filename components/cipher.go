@@ -7,6 +7,7 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rivo/tview"
 
@@ -127,6 +128,12 @@ func (c *Cipher) copyToClipboard() {
 	err := shared.ClipboardCopy(sb.String())
 	if err != nil {
 		c.load.Nav.ShowModal(ErrorModal(err.Error(), c.load.Nav.CloseModal))
+		return
+	}
+
+	if c.load != nil && c.load.Notif != nil {
+		c.load.Notif.CancelToast()
+		c.load.Notif.ShowToastWithTimeout("📋 Cipher copied", time.Second*10)
 	}
 
 }
