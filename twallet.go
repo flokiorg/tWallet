@@ -5,13 +5,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"time"
-
-	"errors"
 
 	"github.com/flokiorg/go-flokicoin/chaincfg"
 	"github.com/flokiorg/go-flokicoin/chainutil"
@@ -31,10 +30,14 @@ var (
 	defaultConfigFilename    = "twallet.conf"
 	defaultMainnetFeeURL     = "https://flokichain.info/api/v1/fees/recommended"
 
-	defaultMaxTransactionsLimit = 1000
+	defaultTransactionDisplayLimit = 121
 
 	parser *flags.Parser
 )
+
+type cliOptions struct {
+	config.AppConfig
+}
 
 func init() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
@@ -42,9 +45,10 @@ func init() {
 
 func main() {
 
-	var cfg config.AppConfig
+	var opts cliOptions
 
-	parser = flags.NewParser(&cfg, flags.Default|flags.PassDoubleDash)
+	parser = flags.NewParser(&opts, flags.Default|flags.PassDoubleDash)
+	parser.SubcommandsOptional = true
 	if _, err := parser.Parse(); err != nil {
 		var flagsErr *flags.Error
 		if errors.As(err, &flagsErr) && flagsErr.Type == flags.ErrHelp {
@@ -53,7 +57,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to parse command line")
 	}
 
-	if cfg.Version {
+	if opts.Version {
 		fmt.Println("Version:", Version)
 		return
 	}
@@ -65,56 +69,56 @@ func main() {
 		showHelpAndExit("failed to resolve default config path", err)
 	}
 	if opt := parser.FindOptionByShortName('c'); !optionDefined(opt) && FileExists(defaultConfigPath) {
-		cfg.ConfigFile = defaultConfigPath
+		opts.ConfigFile = defaultConfigPath
 	}
 
-	if cfg.ConfigFile != "" {
-		err := flags.NewIniParser(parser).ParseFile(cfg.ConfigFile)
+	if opts.ConfigFile != "" {
+		err := flags.NewIniParser(parser).ParseFile(opts.ConfigFile)
 		if err != nil {
 			showHelpAndExit("failed to parse configuration file", err)
 		}
 	}
 
 	if opt := parser.FindOptionByShortName('t'); !optionDefined(opt) {
-		cfg.ConnectionTimeout = defaultConnectionTimeout
+		opts.ConnectionTimeout = defaultConnectionTimeout
 	}
 
 	if opt := parser.FindOptionByShortName('w'); !optionDefined(opt) {
-		cfg.Walletdir = chainutil.AppDataDir(defaultAppDataDir, false)
+		opts.Walletdir = chainutil.AppDataDir(defaultAppDataDir, false)
 	}
 
-	if cfg.MaxTransactionsLimit <= 0 {
-		cfg.MaxTransactionsLimit = defaultMaxTransactionsLimit
+	if opts.TransactionDisplayLimit <= 0 {
+		opts.TransactionDisplayLimit = defaultTransactionDisplayLimit
 	}
 
-	cfg.Network = defaultNetwork
-	if cfg.RegressionTest {
-		cfg.Network = &chaincfg.RegressionNetParams
-	} else if cfg.Testnet {
-		cfg.Network = &chaincfg.TestNet3Params
+	opts.Network = defaultNetwork
+	if opts.RegressionTest {
+		opts.Network = &chaincfg.RegressionNetParams
+	} else if opts.Testnet {
+		opts.Network = &chaincfg.TestNet3Params
 	}
 
-	if opt := parser.FindOptionByLongName("feeurl"); !optionDefined(opt) && cfg.Network.Name == chaincfg.MainNetParams.Name {
-		cfg.Feeurl = defaultMainnetFeeURL
+	if opt := parser.FindOptionByLongName("feeurl"); !optionDefined(opt) && opts.Network.Name == chaincfg.MainNetParams.Name {
+		opts.Feeurl = defaultMainnetFeeURL
 	}
 
-	usedType, unusedType, err := GetAddressTypesFromName(cfg.AddressType)
+	usedType, unusedType, err := GetAddressTypesFromName(opts.AddressType)
 	if err != nil {
 		showHelpAndExit("invalid address type", err)
 	}
-	cfg.UsedAddressType = usedType
-	cfg.UnusedAddressType = unusedType
+	opts.UsedAddressType = usedType
+	opts.UnusedAddressType = unusedType
 
-	logLevel := shared.ParseLogLevel(cfg.LogLevel)
-	logPath := filepath.Join(cfg.Walletdir, "twallet.log")
+	logLevel := shared.ParseLogLevel(opts.LogLevel)
+	logPath := filepath.Join(opts.Walletdir, "twallet.log")
 	log.Logger = shared.CreateFileLogger(logPath, logLevel)
 	log.Info().
-		Str("network", cfg.Network.Name).
-		Str("wallet_dir", cfg.Walletdir).
+		Str("network", opts.Network.Name).
+		Str("wallet_dir", opts.Walletdir).
 		Str("log_level", logLevel.String()).
 		Msg("starting twallet")
 
-	app := tui.NewApp(&cfg)
+	app := tui.NewApp(&opts.AppConfig)
 
 	defer func() {
 		if r := recover(); r != nil {

@@ -6,9 +6,9 @@ toolchain go1.24.3
 
 require (
 	github.com/atotto/clipboard v0.1.4
-	github.com/flokiorg/flnd v0.1.3-beta
-	github.com/flokiorg/go-flokicoin v0.25.8-beta
-	github.com/flokiorg/walletd v0.1.3-beta
+	github.com/flokiorg/flnd v0.1.6-beta
+	github.com/flokiorg/go-flokicoin v0.25.10-beta
+	github.com/flokiorg/walletd v0.1.5-beta
 	github.com/gdamore/tcell/v2 v2.8.1
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
@@ -47,7 +47,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
-	github.com/flokiorg/flokicoin-neutrino v0.16.3-beta // indirect
+	github.com/flokiorg/flokicoin-neutrino v0.16.4-beta // indirect
 	github.com/flokiorg/go-socks v0.0.0-20170105172521-4720035b7bfd // indirect
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
