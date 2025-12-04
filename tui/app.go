@@ -52,6 +52,7 @@ func NewApp(cfg *config.AppConfig) *App {
 	}
 
 	app.EnablePaste(true).EnableMouse(true)
+	app.installResizeGuard()
 	app.SetInputCapture(app.captureStartupKeys)
 
 	app.startBoot()
@@ -63,4 +64,17 @@ func (app *App) Close() {
 	if app.flnsvc != nil {
 		app.flnsvc.Stop()
 	}
+}
+
+// installResizeGuard skips drawing while the terminal is reporting tiny/zero
+// dimensions, which can happen mid-resize and has been known to trigger
+// panics inside tcell's drawing routines.
+func (app *App) installResizeGuard() {
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		w, h := screen.Size()
+		if w <= 1 || h <= 1 {
+			return true
+		}
+		return false
+	})
 }
