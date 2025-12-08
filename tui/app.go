@@ -7,6 +7,7 @@ package tui
 import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"os"
 
 	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/config"
@@ -42,6 +43,8 @@ type App struct {
 	flnsvc           *flnwallet.Service
 	recoveryRequests chan struct{}
 	bootLog          chan string
+	autoRecover      bool
+	restartRecovery  bool
 }
 
 func NewApp(cfg *config.AppConfig) *App {
@@ -50,6 +53,7 @@ func NewApp(cfg *config.AppConfig) *App {
 		pages:            tview.NewPages(),
 		cfg:              cfg,
 		recoveryRequests: make(chan struct{}, 1),
+		autoRecover:      os.Getenv("TWALLET_AUTO_RECOVER") == "1",
 	}
 
 	app.EnablePaste(true).EnableMouse(true)
@@ -65,6 +69,10 @@ func (app *App) Close() {
 	if app.flnsvc != nil {
 		app.flnsvc.Stop()
 	}
+}
+
+func (app *App) ShouldRestartForRecovery() bool {
+	return app.restartRecovery
 }
 
 // installResizeGuard skips drawing while the terminal is reporting tiny/zero

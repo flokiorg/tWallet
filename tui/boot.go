@@ -35,11 +35,13 @@ func (app *App) startBoot() {
 	app.SetRoot(app.pages, true).SetFocus(app.pages)
 
 	go app.bootLoop()
+
+	if app.autoRecover {
+		go app.requestRecovery()
+	}
 }
 
 func (app *App) bootLoop() {
-	defer close(app.bootLog)
-
 	defer func() {
 		if r := recover(); r != nil {
 			msg := "startup panic"
@@ -58,6 +60,15 @@ func (app *App) bootLoop() {
 	time.Sleep(time.Second * 1)
 bootLoop:
 	for {
+		if app.autoRecover || app.consumeRecoveryRequest() {
+			app.autoRecover = false
+			if err := app.recoverWallet("Recovery requested"); err != nil {
+				app.stopService()
+				return
+			}
+			continue
+		}
+
 		if app.flnsvc == nil {
 			app.flnsvc = flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
 		}
@@ -128,7 +139,7 @@ bootLoop:
 func (app *App) captureStartupKeys(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Rune() {
 	case 'r', 'R':
-		app.requestRecovery()
+		app.scheduleRecoveryRestart()
 		return nil
 	}
 	return event
@@ -193,7 +204,20 @@ func (app *App) log(msg string) {
 	if strings.TrimSpace(msg) == "" {
 		return
 	}
-	app.bootLog <- msg
+	defer func() {
+		if recover() != nil {
+			// Channel closed; drop the log to avoid crashing during shutdown.
+		}
+	}()
+	if app.bootLog != nil {
+		app.bootLog <- msg
+	}
+}
+
+func (app *App) scheduleRecoveryRestart() {
+	app.restartRecovery = true
+	app.log("[orange]Restarting in recovery mode…")
+	app.Stop()
 }
 
 func (app *App) recoverWallet(reason string) error {
