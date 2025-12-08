@@ -93,10 +93,10 @@ func PurgeNeutrinoCache(cfg *config.AppConfig, logf func(string)) error {
 
 	base := filepath.Join(walletDir, "data", "chain", "flokicoin", network)
 	targets := []string{
-		filepath.Join(base, "neutrino.db"),
-		filepath.Join(base, "neutrino.sqlite"),
 		filepath.Join(base, "block_headers.bin"),
 		filepath.Join(base, "reg_filter_headers.bin"),
+		filepath.Join(base, "neutrino.db"),
+		filepath.Join(base, "neutrino.sqlite"),
 	}
 
 	removed := false
