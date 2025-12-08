@@ -264,12 +264,6 @@ func balanceView(confirmedBalance, unconfirmedBalance, lockedBalance chainutil.A
 
 	strBalance := fmt.Sprintf("Balance: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(confirmedBalance), 6))
 
-	if lockedBalance > 0 && unconfirmedBalance > 0 {
-		total := lockedBalance + unconfirmedBalance
-		strBalance += fmt.Sprintf("[-:-:-]Pending: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(total), 6))
-		return strBalance
-	}
-
 	if unconfirmedBalance > 0 || lockedBalance == 0 {
 		strBalance += fmt.Sprintf("[-:-:-]Unconfirmed: [%s:-:b]%s\n", tcell.ColorGreen, FormatAmountView(chainutil.Amount(unconfirmedBalance), 6))
 	}
