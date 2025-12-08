@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	. "github.com/flokiorg/twallet/shared"
@@ -34,7 +35,7 @@ func logoView() tview.Primitive {
 	return view
 }
 
-func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
+func SplashScreen(app *tview.Application) (chan string, tview.Primitive) {
 
 	welcomeText := tview.NewTextView().
 		SetText(WELCOME_MESSAGE).
@@ -49,7 +50,10 @@ func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 
 	bootTextField := tview.NewTextView().
 		SetDynamicColors(true).
-		SetTextAlign(tview.AlignCenter)
+		SetTextAlign(tview.AlignLeft)
+	bootTextField.SetBorder(true).SetBorderColor(tcell.ColorOrange)
+	bootTextField.SetTitle("[::b]Boot log")
+	bootTextField.SetTitleAlign(tview.AlignLeft)
 
 	bootTextCentered := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
@@ -60,7 +64,7 @@ func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 	bootTextRow := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(bootTextCentered, 5, 1, false).
+		AddItem(bootTextCentered, 0, 0, false).
 		AddItem(nil, 0, 1, false)
 
 	view := tview.NewFlex().
@@ -74,9 +78,18 @@ func SplashScreen(app *tview.Application) (chan<- string, tview.Primitive) {
 
 	bootText := make(chan string)
 	go func() {
+		var logs []string
+		logShown := false
 		for t := range bootText {
+			logs = append(logs, t)
+			text := strings.Join(logs, "\n")
 			app.QueueUpdateDraw(func() {
-				bootTextField.SetText(t)
+				if !logShown {
+					bootTextRow.ResizeItem(bootTextCentered, 9, 1)
+					logShown = true
+				}
+				bootTextField.SetText(text)
+				bootTextField.ScrollToEnd()
 			})
 		}
 	}()

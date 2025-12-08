@@ -22,20 +22,38 @@ import (
 
 const (
 	startupHealthTimeout = 20 * time.Second
+	purgeRetryAttempts   = 3
+	purgeRetryDelay      = 5 * time.Second
 )
 
 func (app *App) startBoot() {
 	bootText, splashscreen := pages.SplashScreen(app.Application)
+	app.bootLog = bootText
 	app.pages.AddPage("splashscreen", splashscreen, true, true).
 		AddPage("reloading", pages.ReloadingScreen(), true, false)
 
 	app.SetRoot(app.pages, true).SetFocus(app.pages)
 
-	go app.bootLoop(bootText)
+	go app.bootLoop()
 }
 
-func (app *App) bootLoop(bootText chan<- string) {
-	defer close(bootText)
+func (app *App) bootLoop() {
+	defer close(app.bootLog)
+
+	defer func() {
+		if r := recover(); r != nil {
+			msg := "startup panic"
+			switch v := r.(type) {
+			case error:
+				msg = v.Error()
+			case string:
+				msg = v
+			default:
+				msg = fmt.Sprint(v)
+			}
+			app.log(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", msg))
+		}
+	}()
 
 	time.Sleep(time.Second * 1)
 bootLoop:
@@ -50,7 +68,7 @@ bootLoop:
 			select {
 			case <-app.recoveryRequests:
 				app.flnsvc.Unsubscribe(sub)
-				if err := app.recoverWallet(bootText, "Recovery requested"); err != nil {
+				if err := app.recoverWallet("Recovery requested"); err != nil {
 					app.stopService()
 					return
 				}
@@ -58,7 +76,7 @@ bootLoop:
 
 			case update, ok := <-sub:
 				if !ok || update == nil {
-					app.sendBootNotification(bootText, "[red:-:-]Error:[-:-:-] wallet service closed unexpectedly during startup")
+					app.log("[red:-:-]Error:[-:-:-] wallet service closed unexpectedly during startup")
 					app.stopService()
 					return
 				}
@@ -77,21 +95,21 @@ bootLoop:
 							"[red:-:-]Error:[-:-:-] %s\n[orange]Neutrino headers look corrupted. Press 'r' to run recovery.\nPress Ctrl+C to quit.",
 							msg,
 						)
-						app.sendBootNotification(bootText, combinedMsg)
+						app.log(combinedMsg)
 						app.stopService()
-						if app.waitForRecoveryConfirmation(bootText) {
-							if err := app.recoverWallet(bootText, "Neutrino headers failed to load during startup"); err != nil {
+						if app.waitForRecoveryConfirmation() {
+							if err := app.recoverWallet("Neutrino headers failed to load during startup"); err != nil {
 								app.stopService()
 								return
 							}
 							continue bootLoop
 						}
-						app.sendBootNotification(bootText, "[red]Recovery cancelled. Exiting startup.")
+						app.log("[red]Recovery cancelled. Exiting startup.")
 						app.stopService()
 						return
 					}
 					app.flnsvc.Unsubscribe(sub)
-					app.sendBootNotification(bootText, fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", msg))
+					app.log(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s. Press Ctrl+Q to quit. If it keeps happening, reach out to the Lokichain community.", msg))
 					app.stopService()
 					return
 				case flnwallet.StatusQuit:
@@ -159,7 +177,7 @@ func (app *App) isEOFError(err error) bool {
 	return false
 }
 
-func (app *App) waitForRecoveryConfirmation(bootText chan<- string) bool {
+func (app *App) waitForRecoveryConfirmation() bool {
 	app.clearRecoveryRequests()
 	for {
 		select {
@@ -171,42 +189,51 @@ func (app *App) waitForRecoveryConfirmation(bootText chan<- string) bool {
 	}
 }
 
-func (app *App) sendBootNotification(bootText chan<- string, msg string) {
+func (app *App) log(msg string) {
 	if strings.TrimSpace(msg) == "" {
 		return
 	}
-	select {
-	case bootText <- msg:
-	default:
-	}
+	app.bootLog <- msg
 }
 
-func (app *App) recoverWallet(bootText chan<- string, reason string) error {
+func (app *App) recoverWallet(reason string) error {
 	app.clearRecoveryRequests()
 
 	if reason != "" {
-		app.sendBootNotification(bootText, fmt.Sprintf("[orange]Entering recovery mode: %s", reason))
+		app.log(fmt.Sprintf("[orange]Entering recovery mode: %s", reason))
 	} else {
-		app.sendBootNotification(bootText, "[orange]Entering recovery mode…")
+		app.log("[orange]Entering recovery mode…")
 	}
 
-	app.sendBootNotification(bootText, "[gray]Stopping wallet service…")
+	app.log("[gray]Stopping wallet service…")
 	app.stopService()
 
-	app.sendBootNotification(bootText, "[gray]Clearing cached chain data…")
-	if err := load.PurgeNeutrinoCache(app.cfg, func(msg string) {
-		app.sendBootNotification(bootText, fmt.Sprintf("[gray]%s", msg))
-	}); err != nil {
-		app.sendBootNotification(bootText, fmt.Sprintf("[red]Recovery failed: %s", utils.FormatBootError(err)))
-		return err
+	app.log("[gray]Clearing cached chain data…")
+	var purgeErr error
+	for attempt := 1; attempt <= purgeRetryAttempts; attempt++ {
+		purgeErr = load.PurgeNeutrinoCache(app.cfg, func(msg string) {
+			app.log(fmt.Sprintf("[gray]%s", msg))
+		})
+		if purgeErr == nil {
+			break
+		}
+
+		if attempt < purgeRetryAttempts {
+			app.log(fmt.Sprintf("[orange]Cache cleanup failed (attempt %d/%d): %s. Retrying in 5s…", attempt, purgeRetryAttempts, utils.FormatBootError(purgeErr)))
+			time.Sleep(purgeRetryDelay)
+		}
+	}
+	if purgeErr != nil {
+		app.log(fmt.Sprintf("[red]Recovery failed: %s. Press Ctrl+Q to quit. If it keeps happening, reach out to the Lokichain community.", utils.FormatBootError(purgeErr)))
+		return purgeErr
 	}
 
-	app.sendBootNotification(bootText, "[gray]Restarting wallet service…")
+	app.log("[gray]Restarting wallet service…")
 	app.flnsvc = flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
 
 	health, err := load.CheckWalletHealth(context.Background(), app.flnsvc, startupHealthTimeout)
 	if err != nil {
-		app.sendBootNotification(bootText, fmt.Sprintf("[red]Recovery failed during health check: %s", utils.FormatBootError(err)))
+		app.log(fmt.Sprintf("[red]Recovery failed during health check: %s", utils.FormatBootError(err)))
 		return err
 	}
 
@@ -215,12 +242,12 @@ func (app *App) recoverWallet(bootText chan<- string, reason string) error {
 		if reason == "" {
 			reason = "wallet still unavailable"
 		}
-		app.sendBootNotification(bootText, fmt.Sprintf("[red]Wallet still unhealthy after recovery: %s", reason))
-		app.sendBootNotification(bootText, "[red]Please restore from your seed/mnemonic and restart twallet. Press Ctrl+C to quit.")
+		app.log(fmt.Sprintf("[red]Wallet still unhealthy after recovery: %s", reason))
+		app.log("[red]Please restore from your seed/mnemonic and restart twallet. Press Ctrl+C to quit.")
 		return errors.New("wallet remains unhealthy after recovery")
 	}
 
-	app.sendBootNotification(bootText, "[green]Wallet recovered. Continuing startup…")
+	app.log("[green]Wallet recovered. Continuing startup…")
 	return nil
 }
 
