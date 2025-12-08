@@ -118,26 +118,48 @@ func main() {
 		Str("log_level", logLevel.String()).
 		Msg("starting twallet")
 
-	app := tui.NewApp(&opts.AppConfig)
-
-	defer func() {
-		if r := recover(); r != nil {
-			stack := debug.Stack()
-			app.Stop()
-			app.Close()
-			log.Error().Interface("panic", r).Bytes("stack", stack).Msg("unhandled panic")
-			fmt.Fprintf(os.Stderr, "\npanic: %v\n%s", r, stack)
-			os.Exit(1)
+	origAutoRecover := os.Getenv("TWALLET_AUTO_RECOVER")
+	restartForRecovery := false
+	for {
+		if restartForRecovery {
+			_ = os.Setenv("TWALLET_AUTO_RECOVER", "1")
+		} else {
+			_ = os.Setenv("TWALLET_AUTO_RECOVER", origAutoRecover)
 		}
-	}()
 
-	if err := app.Run(); err != nil {
-		app.Stop()
-		log.Fatal().Err(err).Msg("app failed")
+		app := tui.NewApp(&opts.AppConfig)
+
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					stack := debug.Stack()
+					app.Stop()
+					app.Close()
+					log.Error().Interface("panic", r).Bytes("stack", stack).Msg("unhandled panic")
+					fmt.Fprintf(os.Stderr, "\npanic: %v\n%s", r, stack)
+					os.Exit(1)
+				}
+			}()
+
+			if err := app.Run(); err != nil {
+				app.Stop()
+				log.Fatal().Err(err).Msg("app failed")
+			}
+		}()
+
+		fmt.Println("Shutting down...")
+		app.Close()
+		fmt.Println("Shutdown complete")
+
+		if app.ShouldRestartForRecovery() {
+			restartForRecovery = true
+			continue
+		}
+
+		break
 	}
-	fmt.Println("Shutting down...")
-	app.Close()
-	fmt.Println("Shutdown complete")
+
+	_ = os.Setenv("TWALLET_AUTO_RECOVER", origAutoRecover)
 }
 
 func showHelpAndExit(msg string, err error) {
