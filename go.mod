@@ -6,7 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/atotto/clipboard v0.1.4
-	github.com/flokiorg/flnd v0.1.7-beta
+	github.com/flokiorg/flnd v0.1.9-beta
 	github.com/flokiorg/go-flokicoin v0.25.10-beta
 	github.com/flokiorg/walletd v0.1.5-beta
 	github.com/gdamore/tcell/v2 v2.13.1
@@ -105,7 +105,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/miekg/dns v1.1.63 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
