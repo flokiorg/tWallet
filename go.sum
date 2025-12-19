@@ -140,6 +140,8 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/fergusstrange/embedded-postgres v1.25.0 h1:sa+k2Ycrtz40eCRPOzI7Ry7TtkWXXJ+YRsxpKMDhxK0=
 github.com/fergusstrange/embedded-postgres v1.25.0/go.mod h1:t/MLs0h9ukYM6FSt99R7InCHs1nW0ordoVCcnzmpTYw=
+github.com/flokiorg/flnd v0.1.10-beta h1:A14WBsoTpQy9aKf5SL0KhDu9OXIEW1bpjxmrGO88juw=
+github.com/flokiorg/flnd v0.1.10-beta/go.mod h1:UDu0Rz/+og7ZxkAaKJ5VoM9chG/qR3DoNAwiqLZEVV4=
 github.com/flokiorg/flokicoin-neutrino v0.16.4-beta h1:/brUIe8ULAeN7hE+NqCwSo/s3dpD5ttXh2RBvIuVfLM=
 github.com/flokiorg/flokicoin-neutrino v0.16.4-beta/go.mod h1:0hpgE2dNjuOV+p7BdcSOxY6++iUwc7YdZJ6MoqgRa4E=
 github.com/flokiorg/go-flokicoin v0.25.10-beta h1:BDSiqqY+oWCFxQUcDehOJvkEvy0aHBB5sJVsg2gLvMs=
@@ -156,8 +158,8 @@ github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/gdamore/encoding v1.0.1 h1:YzKZckdBL6jVt2Gc+5p82qhrGiqMdG/eNs6Wy0u3Uhw=
 github.com/gdamore/encoding v1.0.1/go.mod h1:0Z0cMFinngz9kS1QfMjCP8TY7em3bZYeeklsSDPivEo=
-github.com/gdamore/tcell/v2 v2.13.1 h1:Ca2N6mHxhXuElCgn+nfKuZjS7gwNiIRKHFiljrZQ26A=
-github.com/gdamore/tcell/v2 v2.13.1/go.mod h1:+Wfe208WDdB7INEtCsNrAN6O2m+wsTPk1RAovjaILlo=
+github.com/gdamore/tcell/v2 v2.13.4 h1:k4fdtdHGvLsLr2RttPnWEGTZEkEuTaL+rL6AOVFyRWU=
+github.com/gdamore/tcell/v2 v2.13.4/go.mod h1:+Wfe208WDdB7INEtCsNrAN6O2m+wsTPk1RAovjaILlo=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/go-errors/errors v1.0.1 h1:LUHzmkK3GUKUrL/1gfBUxAHzcev3apQlezX/+O7ma6w=
 github.com/go-errors/errors v1.0.1/go.mod h1:f4zRHt4oKfwPJE5k8C9vpYG+aDHdBFUsgrm6/TyX73Q=

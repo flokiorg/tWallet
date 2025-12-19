@@ -5,9 +5,10 @@
 package tui
 
 import (
+	"os"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"os"
 
 	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/config"
@@ -57,7 +58,6 @@ func NewApp(cfg *config.AppConfig) *App {
 	}
 
 	app.EnablePaste(true).EnableMouse(true)
-	app.installResizeGuard()
 	app.SetInputCapture(app.captureStartupKeys)
 
 	app.startBoot()
@@ -73,23 +73,4 @@ func (app *App) Close() {
 
 func (app *App) ShouldRestartForRecovery() bool {
 	return app.restartRecovery
-}
-
-// installResizeGuard skips drawing while the terminal is reporting tiny/zero
-// dimensions, which can happen mid-resize and has been known to trigger
-// panics inside tcell's drawing routines.
-func (app *App) installResizeGuard() {
-	var skipped bool
-	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		w, h := screen.Size()
-		if w < 1 || h < 1 {
-			skipped = true
-			return true
-		}
-		if skipped {
-			screen.Clear()
-			skipped = false
-		}
-		return false
-	})
 }

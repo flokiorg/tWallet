@@ -6,10 +6,10 @@ toolchain go1.24.4
 
 require (
 	github.com/atotto/clipboard v0.1.4
-	github.com/flokiorg/flnd v0.1.9-beta
+	github.com/flokiorg/flnd v0.1.10-beta
 	github.com/flokiorg/go-flokicoin v0.25.10-beta
 	github.com/flokiorg/walletd v0.1.5-beta
-	github.com/gdamore/tcell/v2 v2.13.1
+	github.com/gdamore/tcell/v2 v2.13.4
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/rivo/tview v0.42.0
 	github.com/rs/zerolog v1.34.0
