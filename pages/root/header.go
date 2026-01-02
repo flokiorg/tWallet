@@ -20,9 +20,8 @@ import (
 
 type Header struct {
 	*tview.Flex
-	logo      *tview.TextView
-	shortcuts *tview.TextView
-	// shortcutsWrap     *tview.Flex
+	logo              *tview.TextView
+	shortcuts         *tview.Flex
 	balance           *tview.TextView
 	hotkeys           *tview.TextView
 	walletInfo        *tview.Grid
@@ -229,19 +228,38 @@ func (h *Header) buildLogo() *tview.TextView {
 	return logo
 }
 
-func buildLogShortcutView() *tview.TextView {
+func buildLogShortcutView() *tview.Flex {
 	accent := tcell.ColorLightSkyBlue
-	shortcuts := tview.NewTextView().
+
+	col1 := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignLeft)
-	shortcuts.SetBorder(false).
-		SetBorderPadding(0, 0, 1, 1)
+	col1.SetBorder(false)
 
-	fmt.Fprintf(shortcuts, "\n[%s:-:-]<ctrl+t>[gray:-:-] Transactions\n", accent)
-	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+a>[gray:-:-] Addresses\n", accent)
-	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+s>[gray:-:-] Sign & Verify\n", accent)
-	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+x>[gray:-:-] Resync\n", accent)
-	fmt.Fprintf(shortcuts, "[%s:-:-]<ctrl+l>[gray:-:-] Logs", accent)
+	fmt.Fprintf(col1, "\n[%s:-:-]<ctrl+t>[gray:-:-] Transactions\n", accent)
+	fmt.Fprintf(col1, "[%s:-:-]<ctrl+a>[gray:-:-] Addresses\n", accent)
+	fmt.Fprintf(col1, "[%s:-:-]<ctrl+s>[gray:-:-] Sign & Verify", accent)
+
+	col2 := tview.NewTextView().
+		SetDynamicColors(true).
+		SetTextAlign(tview.AlignLeft)
+	col2.SetBorder(false)
+
+	fmt.Fprintf(col2, "\n[%s:-:-]<ctrl+x>[gray:-:-] Resync\n", accent)
+	fmt.Fprintf(col2, "[%s:-:-]<ctrl+l>[gray:-:-] Logs\n", accent)
+	fmt.Fprintf(col2, "[%s:-:-]<ctrl+n>[gray:-:-] Lightning Config", accent)
+
+	shortcuts := tview.NewFlex().
+		AddItem(col1, 0, 1, false).
+		AddItem(col2, 0, 1, false)
+
+	// Add padding if needed via BorderPadding on the Flex or columns?
+	// Creating wrapper or setting padding on columns.
+	// Existing code had: SetBorderPadding(0, 0, 1, 1).
+	// I can apply padding to the Flex if possible, otherwise wrapper.
+	// Flex doesn't have SetBorderPadding directly unless it has Border enabled?
+	// tview.Box has SetBorderPadding. Flex embeds Box. So yes.
+	shortcuts.SetBorder(false).SetBorderPadding(0, 0, 1, 1)
 
 	return shortcuts
 }
