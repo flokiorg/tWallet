@@ -14,6 +14,7 @@ require (
 	github.com/rivo/tview v0.42.0
 	github.com/rs/zerolog v1.34.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	golang.org/x/term v0.37.0
 	google.golang.org/grpc v1.71.0
 )
 
@@ -165,7 +166,6 @@ require (
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect

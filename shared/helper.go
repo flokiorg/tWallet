@@ -9,10 +9,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/atotto/clipboard"
 	"github.com/flokiorg/go-flokicoin/chaincfg"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/flokiorg/go-flokicoin/wire"
+	"github.com/flokiorg/twallet/utils/clip"
 	"github.com/gdamore/tcell/v2"
 	"github.com/skip2/go-qrcode"
 )
@@ -68,7 +68,8 @@ func FormatAmountView(value chainutil.Amount, precision int) string {
 }
 
 func ClipboardCopy(text string) error {
-	if err := clipboard.WriteAll(text); err != nil {
+	_, err := clip.CopyText(text)
+	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return fmt.Errorf("right-click to copy (no display)")
 		}
