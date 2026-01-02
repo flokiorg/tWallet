@@ -124,8 +124,6 @@ func NewPage(l *load.Load) tview.Primitive {
 
 	w.view.SetInputCapture(w.handleKeys)
 
-	w.applyPlaceholder("Loading transactions...")
-
 	w.nsub, w.cancelN = l.Notif.Subscribe()
 	go w.listenNewTransactions()
 	go w.startLogTail()
@@ -142,6 +140,9 @@ func (w *Wallet) handleKeys(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Key() {
 	case tcell.KeyCtrlL:
 		w.showLogsView()
+		return nil
+	case tcell.KeyCtrlN:
+		w.showLightningConfigView()
 		return nil
 	case tcell.KeyCtrlT:
 		w.showTransactionsView()
