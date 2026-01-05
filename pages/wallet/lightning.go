@@ -117,5 +117,5 @@ func (w *Wallet) showLightningConfigView() {
 	borderedContainer.AddItem(tview.NewTextView().SetBackgroundColor(bgColor), 2, 1, false)
 
 	// Modal
-	w.nav.ShowModal(components.NewModal(borderedContainer, 85, 20, w.closeModal))
+	w.nav.ShowModal(components.NewModal(borderedContainer, 85, 22, w.closeModal))
 }
