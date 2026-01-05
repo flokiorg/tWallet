@@ -1,12 +1,12 @@
 package config
 
 import (
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/flnd/lnrpc"
+	"github.com/flokiorg/twallet/flnd"
 )
 
 type AppConfig struct {
-	flnwallet.ServiceConfig
+	flnd.ServiceConfig
 	ConfigFile      string `short:"c" long:"config" description:"Path to configuration file"`
 	LogLevel        string `long:"loglevel" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal" choice:"panic" default:"info" description:"Logging level for twallet output"`
 	DefaultPassword string `long:"defaultpassword" description:"Use default passphrase for locking (TESTING ONLY, DO NOT USE IN MAINNET OR PRODUCTION ENVIRONMENTS)"`

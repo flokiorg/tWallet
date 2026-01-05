@@ -15,7 +15,6 @@ import (
 )
 
 var (
-	ConsoleLogger    zerolog.Logger
 	FileLogger       zerolog.Logger
 	loggerConfigured atomic.Bool
 	fileLevelWriter  zerolog.LevelWriter
@@ -37,11 +36,6 @@ func CreateFileLogger(logpath string, level zerolog.Level) zerolog.Logger {
 	}
 	zerolog.SetGlobalLevel(level)
 
-	consoleWriter := zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: "2006-01-02 15:04:05",
-	}
-
 	// Ensure the directory exists.
 	dir := filepath.Dir(logpath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -60,11 +54,12 @@ func CreateFileLogger(logpath string, level zerolog.Level) zerolog.Logger {
 	}
 
 	fileLevelWriter = zerolog.MultiLevelWriter(fileConsoleWriter)
-	multiWriter := zerolog.MultiLevelWriter(consoleWriter, fileConsoleWriter)
+	// multiWriter := zerolog.MultiLevelWriter(consoleWriter, fileConsoleWriter)
+	// We only write to file to avoid corrupting the TUI.
+	multiWriter := zerolog.MultiLevelWriter(fileConsoleWriter)
 
 	logger := zerolog.New(multiWriter).With().Timestamp().Logger().Level(level)
 
-	ConsoleLogger = zerolog.New(consoleWriter).With().Timestamp().Logger().Level(level)
 	FileLogger = logger
 	loggerConfigured.Store(true)
 

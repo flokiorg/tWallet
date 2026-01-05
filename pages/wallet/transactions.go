@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/flnd/lnrpc"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 )
@@ -85,7 +85,7 @@ func (w *Wallet) handleNotification(evt *load.NotificationEvent) {
 	w.cancelTransactionsUpdateRetry()
 
 	switch evt.State {
-	case flnwallet.StatusReady, flnwallet.StatusTransaction, flnwallet.StatusBlock:
+	case flnd.StatusReady, flnd.StatusTransaction, flnd.StatusBlock:
 		w.onceReady.Do(func() {
 			w.showPlaceholder("Loading transactions...")
 		})
@@ -94,7 +94,7 @@ func (w *Wallet) handleNotification(evt *load.NotificationEvent) {
 		}
 		return
 
-	case flnwallet.StatusScanning:
+	case flnd.StatusScanning:
 		msg := "Scanning transactions..."
 		if evt.BlockHeight > 0 {
 			msg = fmt.Sprintf("Scanning transactions... (%d)", evt.BlockHeight)
@@ -102,7 +102,7 @@ func (w *Wallet) handleNotification(evt *load.NotificationEvent) {
 		w.showPlaceholder(msg)
 		return
 
-	case flnwallet.StatusSyncing:
+	case flnd.StatusSyncing:
 		msg := "Syncing transactions..."
 
 		if rs, err := w.load.GetRecoveryStatus(); err == nil && rs != nil && rs.Info != nil {
@@ -125,23 +125,23 @@ func (w *Wallet) handleNotification(evt *load.NotificationEvent) {
 		w.showPlaceholder(msg)
 		return
 
-	case flnwallet.StatusUnlocked:
+	case flnd.StatusUnlocked:
 		w.showPlaceholder("Unlocking wallet...")
 		return
 
-	case flnwallet.StatusNone:
+	case flnd.StatusNone:
 		w.showPlaceholder("Connecting to wallet...")
 		return
 
-	case flnwallet.StatusNoWallet:
+	case flnd.StatusNoWallet:
 		w.showPlaceholder("Wallet not found.")
 		return
 
-	case flnwallet.StatusDown:
+	case flnd.StatusDown:
 		w.showPlaceholder("Reconnecting to wallet...")
 		return
 
-	case flnwallet.StatusLocked:
+	case flnd.StatusLocked:
 		if w.isRescanActive() {
 			w.showPlaceholder("Wallet rescan: waiting for unlock...")
 			return

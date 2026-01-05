@@ -11,8 +11,8 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	"github.com/gdamore/tcell/v2"
@@ -164,7 +164,7 @@ func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tv
 				return
 			}
 			switch u.State {
-			case flnwallet.StatusDown:
+			case flnd.StatusDown:
 				event := u
 				p.load.QueueUpdateDraw(func() {
 					if event.Err != nil {
@@ -177,7 +177,7 @@ func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tv
 				})
 				return
 
-			case flnwallet.StatusReady, flnwallet.StatusSyncing, flnwallet.StatusUnlocked:
+			case flnd.StatusReady, flnd.StatusSyncing, flnd.StatusUnlocked:
 				p.load.QueueUpdateDraw(func() {
 					p.load.Notif.ShowToastWithTimeout("🔓 Unlocked", time.Second*1)
 					info.SetText(unlockedMessage)

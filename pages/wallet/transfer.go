@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"github.com/flokiorg/twallet/components"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	"github.com/flokiorg/twallet/utils"
@@ -30,7 +30,7 @@ type sendViewModel struct {
 	lastErr                error
 	lokiPerVbyte           uint64
 	finalTx                *chainutil.Tx
-	locks                  []*flnwallet.OutputLock
+	locks                  []*flnd.OutputLock
 	feeCalcID              uint64
 }
 
@@ -296,7 +296,7 @@ func (w *Wallet) showTransferConfirmation(address string, amount chainutil.Amoun
 						Str("tx_hash", txHash).
 						Msg("Transaction published, waiting for confirmation")
 					w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("✅ Transaction Sent! Waiting for confirmation… (%s)", shortHash), time.Second*60)
-					w.load.Notif.BroadcastWalletUpdate(&load.NotificationEvent{State: flnwallet.StatusTransaction})
+					w.load.Notif.BroadcastWalletUpdate(&load.NotificationEvent{State: flnd.StatusTransaction})
 					w.nav.CloseModal()
 				})
 			}(tx)

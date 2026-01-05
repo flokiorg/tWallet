@@ -22,8 +22,8 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/config"
+	"github.com/flokiorg/twallet/flnd"
 	. "github.com/flokiorg/twallet/shared"
 )
 
@@ -51,12 +51,12 @@ type Load struct {
 	Router
 	Nav       *Navigator
 	Notif     *notification
-	Wallet    *flnwallet.Service
+	Wallet    *flnd.Service
 	Logger    zerolog.Logger
 	AppConfig *config.AppConfig
 }
 
-func NewLoad(cfg *config.AppConfig, flnsvc *flnwallet.Service, tapp *tview.Application, pages *tview.Pages) *Load {
+func NewLoad(cfg *config.AppConfig, flnsvc *flnd.Service, tapp *tview.Application, pages *tview.Pages) *Load {
 	logger := NamedLogger("load")
 
 	l := &Load{
@@ -95,8 +95,8 @@ type notification struct {
 	logger zerolog.Logger
 
 	healthState chan HealthState
-	lnHealth    <-chan *flnwallet.Update
-	wallet      *flnwallet.Service
+	lnHealth    <-chan *flnd.Update
+	wallet      *flnd.Service
 	cache       *Cache
 }
 
@@ -104,7 +104,7 @@ type NotificationEvent struct {
 	AccountNotif   *wlt.AccountNotification
 	TxNotif        *wlt.TransactionNotifications
 	SpentNessNotif *wlt.SpentnessNotifications
-	State          flnwallet.Status
+	State          flnd.Status
 	BlockHeight    uint32
 	Err            error
 }
@@ -139,7 +139,7 @@ func (n *notification) Subscribe() (<-chan *NotificationEvent, func()) {
 	return ch, unsubscribe
 }
 
-func newNotification(flnsvc *flnwallet.Service, cache *Cache, logger zerolog.Logger) *notification {
+func newNotification(flnsvc *flnd.Service, cache *Cache, logger zerolog.Logger) *notification {
 	n := &notification{
 		toast:       make(chan string, 5),
 		subs:        make([]chan *NotificationEvent, 0),
@@ -196,7 +196,7 @@ func (n *notification) listen() {
 	}
 }
 
-func (n *notification) ProcessEvent(ev *flnwallet.Update) {
+func (n *notification) ProcessEvent(ev *flnd.Update) {
 
 	event := &NotificationEvent{
 		State:       ev.State,
@@ -205,24 +205,24 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 	}
 
 	switch ev.State {
-	case flnwallet.StatusDown:
+	case flnd.StatusDown:
 		n.reportHealth(HealthState{Level: HealthRed, Info: "disconnected", Err: ev.Err})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusLocked:
+	case flnd.StatusLocked:
 		n.reportHealth(HealthState{Level: HealthOrange, Info: "locked"})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusNone:
+	case flnd.StatusNone:
 		info := "connecting..."
 		n.reportHealth(HealthState{Level: HealthOrange, Info: info})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusNoWallet:
+	case flnd.StatusNoWallet:
 		n.reportHealth(HealthState{Level: HealthOrange, Info: "no wallet"})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusSyncing:
+	case flnd.StatusSyncing:
 		var info string
 		if ev.BlockHeight == 0 {
 			info = "init..."
@@ -232,11 +232,11 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 		n.reportHealth(HealthState{Level: HealthOrange, Info: info})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusUnlocked:
+	case flnd.StatusUnlocked:
 		n.reportHealth(HealthState{Level: HealthGreen, Info: "unlocked"})
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusReady:
+	case flnd.StatusReady:
 		n.logger.Debug().
 			Uint32("block_height", ev.BlockHeight).
 			Msg("wallet ready event")
@@ -251,7 +251,7 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 			n.ShowToast("[red:-:-]Error:[-:-:-] wallet not ready")
 		}
 
-	case flnwallet.StatusTransaction:
+	case flnd.StatusTransaction:
 		if ev.Transaction != nil {
 			n.logger.Debug().
 				Uint32("block_height", uint32(ev.Transaction.BlockHeight)).
@@ -264,7 +264,7 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 		n.cache.updateTip(ev.Transaction.BlockHeight)
 		n.BroadcastWalletUpdate(event)
 
-	case flnwallet.StatusBlock:
+	case flnd.StatusBlock:
 		n.logger.Debug().
 			Uint32("block_height", ev.BlockHeight).
 			Msg("new block notification")
@@ -273,7 +273,7 @@ func (n *notification) ProcessEvent(ev *flnwallet.Update) {
 		n.reportHealth(HealthState{Level: HealthGreen, Info: info})
 		n.BroadcastWalletUpdate(event)
 
-		// case flnwallet.StatusScanning:
+		// case flnd.StatusScanning:
 		// 	var percent float64
 		// 	if ev.SyncedHeight > 0 {
 		// 		percent = float64(ev.BlockHeight) / float64(ev.SyncedHeight) * 100
@@ -431,7 +431,7 @@ func (l *Load) MonitorRecovery(ctx context.Context, interval time.Duration, cb f
 	for {
 		status, err := l.GetRecoveryStatus()
 		if err != nil {
-			if errors.Is(err, flnwallet.ErrDaemonNotRunning) {
+			if errors.Is(err, flnd.ErrDaemonNotRunning) {
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()

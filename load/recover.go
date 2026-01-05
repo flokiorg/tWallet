@@ -13,21 +13,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/flnd/lncfg"
 	"github.com/flokiorg/twallet/config"
+	"github.com/flokiorg/twallet/flnd"
 )
 
 // WalletHealth describes the current availability of the wallet service.
 type WalletHealth struct {
 	Healthy bool
-	State   flnwallet.Status
+	State   flnd.Status
 	Reason  string
 }
 
 // CheckWalletHealth waits for the wallet to reach a ready/locked state or
 // surfaces the first error state encountered within the timeout window.
-func CheckWalletHealth(ctx context.Context, svc *flnwallet.Service, timeout time.Duration) (WalletHealth, error) {
+func CheckWalletHealth(ctx context.Context, svc *flnd.Service, timeout time.Duration) (WalletHealth, error) {
 	sub := svc.Subscribe()
 	defer svc.Unsubscribe(sub)
 
@@ -40,34 +40,34 @@ func CheckWalletHealth(ctx context.Context, svc *flnwallet.Service, timeout time
 			return WalletHealth{}, ctx.Err()
 
 		case <-timer.C:
-			return WalletHealth{Healthy: false, State: flnwallet.StatusNone, Reason: "wallet did not become ready before timeout"}, nil
+			return WalletHealth{Healthy: false, State: flnd.StatusNone, Reason: "wallet did not become ready before timeout"}, nil
 
 		case update, ok := <-sub:
 			if !ok || update == nil {
-				return WalletHealth{Healthy: false, State: flnwallet.StatusDown, Reason: "wallet service closed unexpectedly"}, nil
+				return WalletHealth{Healthy: false, State: flnd.StatusDown, Reason: "wallet service closed unexpectedly"}, nil
 			}
 
 			switch update.State {
-			case flnwallet.StatusReady, flnwallet.StatusUnlocked, flnwallet.StatusSyncing, flnwallet.StatusTransaction, flnwallet.StatusBlock:
+			case flnd.StatusReady, flnd.StatusUnlocked, flnd.StatusSyncing, flnd.StatusTransaction, flnd.StatusBlock:
 				return WalletHealth{Healthy: true, State: update.State}, nil
 
-			case flnwallet.StatusLocked:
+			case flnd.StatusLocked:
 				return WalletHealth{Healthy: true, State: update.State}, nil
 
-			case flnwallet.StatusNoWallet:
+			case flnd.StatusNoWallet:
 				return WalletHealth{Healthy: false, State: update.State, Reason: "wallet not found"}, nil
 
-			case flnwallet.StatusDown:
+			case flnd.StatusDown:
 				reason := "wallet daemon reported down state"
 				if update.Err != nil {
 					reason = update.Err.Error()
 				}
 				return WalletHealth{Healthy: false, State: update.State, Reason: reason}, nil
 
-			case flnwallet.StatusQuit:
+			case flnd.StatusQuit:
 				return WalletHealth{Healthy: false, State: update.State, Reason: "wallet service quit unexpectedly"}, nil
 
-			case flnwallet.StatusNone, flnwallet.StatusInit:
+			case flnd.StatusNone, flnd.StatusInit:
 				// Keep waiting
 			}
 		}

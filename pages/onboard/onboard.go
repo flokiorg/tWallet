@@ -12,8 +12,8 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	. "github.com/flokiorg/twallet/shared"
@@ -338,10 +338,10 @@ func (p *Onboard) waitForWalletReady(ctx context.Context) error {
 			if !ok || update == nil {
 				return fmt.Errorf("wallet subscription closed while waiting for RPC ready")
 			}
-			if update.State == flnwallet.StatusReady {
+			if update.State == flnd.StatusReady {
 				return nil
 			}
-			if update.State == flnwallet.StatusDown && update.Err != nil {
+			if update.State == flnd.StatusDown && update.Err != nil {
 				return update.Err
 			}
 		}
@@ -362,9 +362,9 @@ func (p *Onboard) waitForWalletRPC(ctx context.Context) error {
 			}
 
 			switch update.State {
-			case flnwallet.StatusReady, flnwallet.StatusBlock, flnwallet.StatusTransaction, flnwallet.StatusSyncing:
+			case flnd.StatusReady, flnd.StatusBlock, flnd.StatusTransaction, flnd.StatusSyncing:
 				return nil
-			case flnwallet.StatusDown:
+			case flnd.StatusDown:
 				if update.Err != nil {
 					return update.Err
 				}

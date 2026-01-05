@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/flnd/lnrpc/walletrpc"
 	"github.com/flokiorg/go-flokicoin/chainutil"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
 	"github.com/flokiorg/twallet/components"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/shared"
 )
 
@@ -380,7 +380,7 @@ func shortAddress(addr string) string {
 }
 
 func (w *Wallet) addressTransactionCounts() (map[string]int, error) {
-	txs, err := w.load.Wallet.FetchTransactionsWithOptions(flnwallet.FetchTransactionsOptions{
+	txs, err := w.load.Wallet.FetchTransactionsWithOptions(flnd.FetchTransactionsOptions{
 		IgnoreLimit: true,
 	})
 	if err != nil {

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/gdamore/tcell/v2"
 
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/pages"
 	"github.com/flokiorg/twallet/utils"
@@ -70,7 +70,7 @@ bootLoop:
 		}
 
 		if app.flnsvc == nil {
-			app.flnsvc = flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
+			app.flnsvc = flnd.New(context.Background(), &app.cfg.ServiceConfig)
 		}
 
 		sub := app.flnsvc.Subscribe()
@@ -93,9 +93,9 @@ bootLoop:
 				}
 
 				switch update.State {
-				case flnwallet.StatusNone, flnwallet.StatusInit:
+				case flnd.StatusNone, flnd.StatusInit:
 					continue
-				case flnwallet.StatusDown:
+				case flnd.StatusDown:
 					msg := "wallet reported down during startup"
 					if update.Err != nil {
 						msg = utils.FormatBootError(update.Err)
@@ -123,7 +123,7 @@ bootLoop:
 					app.log(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s. Press Ctrl+Q to quit. If it keeps happening, reach out to the Lokichain community.", msg))
 					app.stopService()
 					return
-				case flnwallet.StatusQuit:
+				case flnd.StatusQuit:
 					app.stopService()
 					return
 				default:
@@ -253,7 +253,7 @@ func (app *App) recoverWallet(reason string) error {
 	}
 
 	app.log("[gray]Restarting wallet service…")
-	app.flnsvc = flnwallet.New(context.Background(), &app.cfg.ServiceConfig)
+	app.flnsvc = flnd.New(context.Background(), &app.cfg.ServiceConfig)
 
 	health, err := load.CheckWalletHealth(context.Background(), app.flnsvc, startupHealthTimeout)
 	if err != nil {

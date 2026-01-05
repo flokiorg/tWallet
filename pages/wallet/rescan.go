@@ -10,8 +10,8 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	"github.com/gdamore/tcell/v2"
@@ -351,21 +351,21 @@ func (w *Wallet) autoUnlockAfterRescan(ctx context.Context, pass string, logProg
 			}
 
 			switch update.State {
-			case flnwallet.StatusUnlocked, flnwallet.StatusReady, flnwallet.StatusSyncing:
+			case flnd.StatusUnlocked, flnd.StatusReady, flnd.StatusSyncing:
 				logProgress("🔓 Wallet unlock confirmed.")
 				w.load.QueueUpdateDraw(func() {
 					w.load.Notif.ShowToastWithTimeout("🔓 Wallet unlocked.", time.Second*2)
 				})
 				return nil
 
-			case flnwallet.StatusLocked:
+			case flnd.StatusLocked:
 				if awaitingConfirmation {
 					logProgress("Wallet reported locked again. Retrying unlock…")
 				}
 				awaitingConfirmation = false
 				resetTimer(0)
 
-			case flnwallet.StatusDown:
+			case flnd.StatusDown:
 				if update.Err != nil {
 					logProgress(fmt.Sprintf("[red:-:-]Wallet down:[-:-:-] %v", update.Err))
 				} else {
@@ -374,7 +374,7 @@ func (w *Wallet) autoUnlockAfterRescan(ctx context.Context, pass string, logProg
 				awaitingConfirmation = false
 				resetTimer(retryDelay)
 
-			case flnwallet.StatusNone:
+			case flnd.StatusNone:
 				logProgress("Wallet initializing…")
 				awaitingConfirmation = false
 				resetTimer(retryDelay)
@@ -466,24 +466,24 @@ func (w *Wallet) waitForWalletRPC(ctx context.Context, logProgress func(string))
 			}
 
 			switch update.State {
-			case flnwallet.StatusReady, flnwallet.StatusBlock, flnwallet.StatusTransaction, flnwallet.StatusSyncing:
+			case flnd.StatusReady, flnd.StatusBlock, flnd.StatusTransaction, flnd.StatusSyncing:
 				logProgress("Wallet RPC ready.")
 				return nil
 
-			case flnwallet.StatusUnlocked:
+			case flnd.StatusUnlocked:
 				logProgress("Wallet unlocked. Waiting for RPC to become active…")
 
-			case flnwallet.StatusDown:
+			case flnd.StatusDown:
 				if update.Err != nil {
 					logProgress(fmt.Sprintf("[red:-:-]Wallet down:[-:-:-] %v", update.Err))
 				} else {
 					logProgress("Wallet service reported down state. Waiting…")
 				}
 
-			case flnwallet.StatusNone:
+			case flnd.StatusNone:
 				logProgress("Wallet initializing RPC services…")
 
-			case flnwallet.StatusLocked:
+			case flnd.StatusLocked:
 				logProgress("Wallet locked; still waiting for RPC availability…")
 
 			default:
@@ -649,7 +649,7 @@ func (w *Wallet) isWalletLocked() bool {
 	}
 
 	if ev := w.load.Wallet.GetLastEvent(); ev != nil {
-		return ev.State == flnwallet.StatusLocked
+		return ev.State == flnd.StatusLocked
 	}
 
 	// If we cannot determine the state, assume locked to keep user safe.

@@ -32,6 +32,11 @@ var (
 
 	defaultTransactionDisplayLimit = 121
 
+	defaultRPCListener  = "127.0.0.1:10005"
+	defaultRESTListener = "127.0.0.1:5050"
+	defaultRestCORS     = "http://localhost:3000"
+	defaultPeerListener = "0.0.0.0:5521"
+
 	parser *flags.Parser
 )
 
@@ -102,6 +107,23 @@ func main() {
 		opts.Feeurl = defaultMainnetFeeURL
 	}
 
+	// Security Hardening: Set secure defaults if not configured
+	if len(opts.RawRPCListeners) == 0 {
+		opts.RawRPCListeners = []string{defaultRPCListener}
+	}
+	if len(opts.RawRESTListeners) == 0 {
+		opts.RawRESTListeners = []string{defaultRESTListener}
+	}
+	if len(opts.RestCORS) == 0 {
+		opts.RestCORS = []string{defaultRestCORS}
+	}
+	if len(opts.RawListeners) == 0 {
+		opts.RawListeners = []string{defaultPeerListener}
+	}
+	if opt := parser.FindOptionByLongName("tlsautorefresh"); !optionDefined(opt) {
+		opts.TLSAutoRefresh = true
+	}
+
 	usedType, unusedType, err := GetAddressTypesFromName(opts.AddressType)
 	if err != nil {
 		showHelpAndExit("invalid address type", err)
@@ -112,11 +134,8 @@ func main() {
 	logLevel := shared.ParseLogLevel(opts.LogLevel)
 	logPath := filepath.Join(opts.Walletdir, "twallet.log")
 	log.Logger = shared.CreateFileLogger(logPath, logLevel)
-	log.Info().
-		Str("network", opts.Network.Name).
-		Str("wallet_dir", opts.Walletdir).
-		Str("log_level", logLevel.String()).
-		Msg("starting twallet")
+	fmt.Printf("Starting twallet (network=%s, wallet_dir=%s)\n",
+		opts.Network.Name, opts.Walletdir)
 
 	origAutoRecover := os.Getenv("TWALLET_AUTO_RECOVER")
 	restartForRecovery := false

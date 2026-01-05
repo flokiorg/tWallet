@@ -10,8 +10,8 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/go-flokicoin/chainutil"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	. "github.com/flokiorg/twallet/shared"
 	"github.com/flokiorg/twallet/utils"
@@ -29,7 +29,7 @@ type Header struct {
 	destroy           chan struct{}
 	dcancel           func()
 	nsub              <-chan *load.NotificationEvent
-	state             flnwallet.Status
+	state             flnd.Status
 	status            string
 	walletInfoVisible bool
 	shortcutsVisible  bool
@@ -49,7 +49,7 @@ func NewHeader(l *load.Load) *Header {
 		return h
 	}
 
-	if ev := h.load.Wallet.GetLastEvent(); ev != nil && ev.State == flnwallet.StatusLocked {
+	if ev := h.load.Wallet.GetLastEvent(); ev != nil && ev.State == flnd.StatusLocked {
 		return h
 	}
 
@@ -80,7 +80,7 @@ func NewHeader(l *load.Load) *Header {
 		AddItem(h.hotkeys, 3, 0, 1, 1, 0, 0, false)
 
 	h.walletInfo = walletInfo
-	if h.state != flnwallet.StatusLocked {
+	if h.state != flnd.StatusLocked {
 		h.AddItem(h.shortcuts, 0, 1, false)
 		h.shortcutsVisible = true
 		h.AddItem(walletInfo, 30, 1, false)
@@ -114,7 +114,7 @@ func (h *Header) handleNotification(evt *load.NotificationEvent) {
 		h.state = evt.State
 	}
 
-	h.setWalletInfoVisible(h.state != flnwallet.StatusLocked)
+	h.setWalletInfoVisible(h.state != flnd.StatusLocked)
 
 	if evt != nil {
 		logEvent := h.load.Logger.Trace().
@@ -132,22 +132,22 @@ func (h *Header) handleNotification(evt *load.NotificationEvent) {
 	case evt == nil:
 		h.refreshBalance()
 
-	case evt.State == flnwallet.StatusReady, evt.State == flnwallet.StatusTransaction, evt.State == flnwallet.StatusBlock:
+	case evt.State == flnd.StatusReady, evt.State == flnd.StatusTransaction, evt.State == flnd.StatusBlock:
 		h.refreshBalance()
 
-	case evt.State == flnwallet.StatusSyncing:
+	case evt.State == flnd.StatusSyncing:
 		h.showBalanceStatus("Syncing...", tcell.ColorYellow)
 
-	case evt.State == flnwallet.StatusDown:
+	case evt.State == flnd.StatusDown:
 		h.showBalanceStatus("Reconnecting...", tcell.ColorOrange)
 
-	case evt.State == flnwallet.StatusNone:
+	case evt.State == flnd.StatusNone:
 		h.showBalanceStatus("Connecting...", tcell.ColorYellow)
 
-	case evt.State == flnwallet.StatusNoWallet:
+	case evt.State == flnd.StatusNoWallet:
 		h.showBalanceStatus("Wallet not found.", tcell.ColorRed)
 
-	case evt.State == flnwallet.StatusLocked:
+	case evt.State == flnd.StatusLocked:
 		h.showBalanceStatus("Wallet locked.", tcell.ColorOrange)
 
 	default:

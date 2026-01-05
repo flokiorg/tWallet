@@ -12,8 +12,8 @@ import (
 
 	"github.com/rivo/tview"
 
-	"github.com/flokiorg/flnd/flnwallet"
 	"github.com/flokiorg/twallet/components"
+	"github.com/flokiorg/twallet/flnd"
 	"github.com/flokiorg/twallet/load"
 	"github.com/flokiorg/twallet/shared"
 	"github.com/gdamore/tcell/v2"
@@ -170,7 +170,7 @@ func (c *Change) showChangeForm() {
 							return
 						}
 						switch u.State {
-						case flnwallet.StatusDown:
+						case flnd.StatusDown:
 							event := u
 							c.load.QueueUpdateDraw(func() {
 								if event.Err != nil {
@@ -180,7 +180,7 @@ func (c *Change) showChangeForm() {
 							})
 							return
 
-						case flnwallet.StatusReady, flnwallet.StatusSyncing:
+						case flnd.StatusReady, flnd.StatusSyncing:
 							c.load.Notif.ShowToastWithTimeout("✅ Password changed", time.Second*2)
 							c.load.QueueUpdateDraw(func() {
 								c.load.Go(shared.WALLET)
