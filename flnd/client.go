@@ -1150,7 +1150,7 @@ func (c *Client) GetLightningConfig() (*LightningConfig, error) {
 				rpcPort = p
 			}
 		}
-		address = net.JoinHostPort(ip, rpcPort)
+		address = net.JoinHostPort("127.0.0.1", rpcPort)
 
 		// Peer Port Logic
 		peerPort := strconv.Itoa(defaultPeerPort)
