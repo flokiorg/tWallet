@@ -23,6 +23,9 @@ var (
 
 const (
 	FlndEndpoint = "localhost:10005"
+
+	maxGrpcRecvMsgSize = 50 * 1024 * 1024
+	maxGrpcSendMsgSize = 20 * 1024 * 1024
 )
 
 type daemon struct {
@@ -88,8 +91,8 @@ func (d *daemon) start() (c *Client, err error) {
 	d.conn, err = grpc.NewClient(d.config.RPCListeners[0].String(),
 		grpc.WithTransportCredentials(creds),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(20*1024*1024),
-			grpc.MaxCallSendMsgSize(20*1024*1024),
+			grpc.MaxCallRecvMsgSize(maxGrpcRecvMsgSize),
+			grpc.MaxCallSendMsgSize(maxGrpcSendMsgSize),
 			grpc.UseCompressor(gzip.Name),
 		), grpc.WithConnectParams(grpc.ConnectParams{
 			MinConnectTimeout: 5 * time.Second,

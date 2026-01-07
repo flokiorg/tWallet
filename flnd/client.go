@@ -79,9 +79,12 @@ type FetchTransactionsOptions struct {
 const (
 	defaultRPCTimeout       = 5 * time.Second
 	transactionFetchTimeout = 30 * time.Second
-	transactionPageSize     = 1000
+	transactionPageSize     = 200
 	transactionsCacheTTL    = 5 * time.Minute
 	recentHeaderThreshold   = 5 * time.Minute
+
+	localhostIP           = "127.0.0.1"
+	publicDNSCheckAddress = "8.8.8.8:80"
 )
 
 func NewClient(ctx context.Context, conn *grpc.ClientConn, config *flnd.Config) *Client {
@@ -1136,7 +1139,7 @@ func (c *Client) GetLightningConfig() (*LightningConfig, error) {
 	var peerAddress string
 
 	// Get local IP
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+	conn, err := net.Dial("udp", publicDNSCheckAddress)
 	if err == nil {
 		localAddr := conn.LocalAddr().(*net.UDPAddr)
 		conn.Close()
@@ -1150,7 +1153,7 @@ func (c *Client) GetLightningConfig() (*LightningConfig, error) {
 				rpcPort = p
 			}
 		}
-		address = net.JoinHostPort("127.0.0.1", rpcPort)
+		address = net.JoinHostPort(localhostIP, rpcPort)
 
 		// Peer Port Logic
 		peerPort := strconv.Itoa(defaultPeerPort)
