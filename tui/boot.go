@@ -120,7 +120,7 @@ bootLoop:
 						return
 					}
 					app.flnsvc.Unsubscribe(sub)
-					app.log(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s. Press Ctrl+Q to quit. If it keeps happening, reach out to the Lokichain community.", msg))
+					app.log(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s. Press Ctrl+C to quit. If it keeps happening, reach out to the Lokichain community.", msg))
 					app.stopService()
 					return
 				case flnd.StatusQuit:
@@ -248,7 +248,7 @@ func (app *App) recoverWallet(reason string) error {
 		}
 	}
 	if purgeErr != nil {
-		app.log(fmt.Sprintf("[red]Recovery failed: %s. Press Ctrl+Q to quit. If it keeps happening, reach out to the Lokichain community.", utils.FormatBootError(purgeErr)))
+		app.log(fmt.Sprintf("[red]Recovery failed: %s. Press Ctrl+C to quit. If it keeps happening, reach out to the Lokichain community.", utils.FormatBootError(purgeErr)))
 		return purgeErr
 	}
 
