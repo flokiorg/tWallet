@@ -9,6 +9,7 @@ import (
 	"github.com/flokiorg/flnd/lncfg"
 	"github.com/flokiorg/flnd/lnrpc"
 	"github.com/flokiorg/flnd/lnrpc/walletrpc"
+	"github.com/flokiorg/flnd/lnwire"
 	"github.com/flokiorg/flnd/signal"
 	"github.com/flokiorg/go-flokicoin/chaincfg"
 	"github.com/flokiorg/go-flokicoin/chainutil"
@@ -51,25 +52,68 @@ type FundedPsbt struct {
 }
 
 type ServiceConfig struct {
-	Walletdir               string        `short:"w" long:"walletdir"  description:"Directory for Flokicoin Lightning Network"`
+	// Basic Configuration
+	Walletdir               string        `short:"w" long:"walletdir" description:"Directory for Flokicoin Lightning Network"`
 	RegressionTest          bool          `long:"regtest" description:"Use the regression test network"`
 	Testnet                 bool          `long:"testnet" description:"Use the test network"`
 	ConnectionTimeout       time.Duration `short:"t" long:"connectiontimeout" default:"50s" description:"The timeout value for network connections. Valid time units are {ms, s, m, h}."`
 	DebugLevel              string        `short:"d" long:"debuglevel" default:"info" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical}"`
-	ConnectPeers            []string      `long:"connect" description:"Connect only to the specified peers at startup"`
-	Feeurl                  string        `long:"feeurl" description:"Custom fee estimation API endpoint (Required on mainnet)"`
 	TransactionDisplayLimit int           `long:"transactiondisplaylimit" description:"Maximum number of transactions to fetch per request"`
 	ResetWalletTransactions bool          `long:"resetwallettransactions" description:"Reset wallet transactions on startup to trigger a full rescan"`
 
+	// Network & Peers
+	ConnectPeers []string `long:"connect" description:"Connect only to the specified peers at startup"`
+	AddPeers     []string `long:"addpeer" description:"Add peers to connect to at startup"`
+
+	// Fee Configuration
+	Feeurl string `long:"feeurl" description:"Custom fee estimation API endpoint (Required on mainnet)"`
+
+	// TLS Configuration
 	TLSExtraIPs     []string `long:"tlsextraip" description:"Adds an extra ip to the generated certificate"`
 	TLSExtraDomains []string `long:"tlsextradomain" description:"Adds an extra domain to the generated certificate"`
 	TLSAutoRefresh  bool     `long:"tlsautorefresh" description:"Re-generate TLS certificate and key if the IPs or domains are changed"`
 
+	// RPC/REST Listeners
 	RawRPCListeners  []string `long:"rpclisten" description:"Add an interface/port/socket to listen for RPC connections"`
 	RawRESTListeners []string `long:"restlisten" description:"Add an interface/port/socket to listen for REST connections"`
 	RawListeners     []string `long:"listen" description:"Add an interface/port to listen for peer connections"`
+	RestCORS         []string `long:"restcors" description:"Add an ip:port/hostname to allow cross origin access from. To allow all origins, set as \"*\"."`
 
-	RestCORS []string `long:"restcors" description:"Add an ip:port/hostname to allow cross origin access from. To allow all origins, set as \"*\"."`
+	// Channel Configuration
+	MaxPendingChannels int   `long:"maxpendingchannels" description:"The maximum number of incoming pending channels permitted per peer"`
+	MaxChanSize        int64 `long:"maxchansize" description:"The largest channel size (in satoshis) that we should accept"`
+	MinChanSize        int64 `long:"minchansize" description:"The smallest channel size (in satoshis) that we should accept"`
+
+	// Node Identity
+	Alias string `long:"alias" description:"The node alias (max 32 UTF-8 characters)"`
+	Color string `long:"color" description:"The color of the node in hex format (i.e. '#da9526'). Used to customize node appearance in graph visualizations"`
+
+	// Watchtower
+	WatchtowerActive bool   `long:"watchtower" description:"Enable integrated watchtower"`
+	WatchtowerDir    string `long:"watchtower.towerdir" description:"Directory for watchtower state"`
+
+	// Public Node Configuration
+	ExternalIPs   []string `long:"externalip" description:"Add an ip:port to advertise to the network for incoming connections"`
+	ExternalHosts []string `long:"externalhosts" description:"Add a hostname:port that should be periodically resolved to announce IPs for. If port is not specified, the default (9735) will be used"`
+	DisableListen bool     `long:"nolisten" description:"Disable listening for incoming peer connections"`
+	NAT           bool     `long:"nat" description:"Toggle NAT traversal support (using either UPnP or NAT-PMP) to automatically advertise your external IP address to the network"`
+
+	// Routing & Forwarding
+	MinHTLC       int64  `long:"minhtlc" description:"The smallest HTLC we will forward (in millisatoshis)"`
+	BaseFee       int64  `long:"basefee" description:"The base fee in millisatoshi we will charge for forwarding payments on our channels"`
+	FeeRate       int64  `long:"feerate" description:"The fee rate used when forwarding payments on our channels (in millionths)"`
+	TimeLockDelta uint32 `long:"timelockdelta" description:"The CLTV delta we will subtract from a forwarded HTLC's timelock value"`
+	AcceptKeySend bool   `long:"accept-keysend" description:"If true, spontaneous payments through keysend will be accepted"`
+	AcceptAMP     bool   `long:"accept-amp" description:"If true, spontaneous payments through AMP will be accepted"`
+	Wumbo         bool   `long:"wumbo-channels" description:"If true, the node will be configured to allow channels larger than 5 FLC"`
+
+	// Network Graph & Gossip
+	NumGraphSyncPeers       int           `long:"numgraphsyncpeers" description:"The number of peers that we should receive new graph updates from"`
+	HistoricalSyncInterval  time.Duration `long:"historicalsyncinterval" description:"The polling interval between historical graph sync attempts"`
+	IgnoreHistoricalFilters bool          `long:"ignore-historical-gossip-filters" description:"If true, will not reply with historical data that matches the range specified by a remote peer's gossip_timestamp_filter"`
+	RejectHTLC              bool          `long:"rejecthtlc" description:"If true, lnd will not forward any HTLCs that are meant as onward payments"`
+	StaggerInitialReconnect bool          `long:"stagger-initial-reconnect" description:"If true, will apply a randomized staggering between 0s and 30s when reconnecting to persistent peers on startup"`
+	MaxOutgoingCltvExpiry   uint32        `long:"max-cltv-expiry" description:"The maximum number of blocks funds could be locked up for when forwarding payments"`
 
 	Network *chaincfg.Params
 }
@@ -115,6 +159,90 @@ func New(pctx context.Context, cfg *ServiceConfig) *Service {
 	conf.RestCORS = append(conf.RestCORS, cfg.RestCORS...)
 	conf.TLSAutoRefresh = cfg.TLSAutoRefresh
 	conf.ResetWalletTransactions = cfg.ResetWalletTransactions
+
+	// Network & Peers
+	conf.NeutrinoMode.AddPeers = append(conf.NeutrinoMode.AddPeers, cfg.AddPeers...)
+
+	// Channel Configuration
+	if cfg.MaxPendingChannels > 0 {
+		conf.MaxPendingChannels = cfg.MaxPendingChannels
+	}
+	if cfg.MaxChanSize > 0 {
+		conf.MaxChanSize = cfg.MaxChanSize
+	}
+	if cfg.MinChanSize > 0 {
+		conf.MinChanSize = cfg.MinChanSize
+	}
+
+	// Node Identity
+	if cfg.Alias != "" {
+		conf.Alias = cfg.Alias
+	}
+	if cfg.Color != "" {
+		conf.Color = cfg.Color
+	}
+
+	// Watchtower
+	if cfg.WatchtowerActive {
+		conf.Watchtower.Active = cfg.WatchtowerActive
+		if cfg.WatchtowerDir != "" {
+			conf.Watchtower.TowerDir = cfg.WatchtowerDir
+		}
+	}
+
+	// Public Node Configuration
+	conf.RawExternalIPs = append(conf.RawExternalIPs, cfg.ExternalIPs...)
+	conf.ExternalHosts = append(conf.ExternalHosts, cfg.ExternalHosts...)
+	if cfg.DisableListen {
+		conf.DisableListen = cfg.DisableListen
+	}
+	if cfg.NAT {
+		conf.NAT = cfg.NAT
+	}
+
+	// Routing & Forwarding
+	if cfg.MinHTLC > 0 {
+		conf.Flokicoin.MinHTLCIn = lnwire.MilliLoki(cfg.MinHTLC)
+	}
+	if cfg.BaseFee > 0 {
+		conf.Flokicoin.BaseFee = lnwire.MilliLoki(cfg.BaseFee)
+	}
+	if cfg.FeeRate > 0 {
+		conf.Flokicoin.FeeRate = lnwire.MilliLoki(cfg.FeeRate)
+	}
+	if cfg.TimeLockDelta > 0 {
+		conf.Flokicoin.TimeLockDelta = cfg.TimeLockDelta
+	}
+	if cfg.AcceptKeySend {
+		conf.AcceptKeySend = cfg.AcceptKeySend
+	}
+	if cfg.AcceptAMP {
+		conf.AcceptAMP = cfg.AcceptAMP
+	}
+	if cfg.Wumbo {
+		conf.ProtocolOptions.WumboChans = true
+	}
+
+	// Network Graph & Gossip
+	if cfg.NumGraphSyncPeers > 0 {
+		conf.NumGraphSyncPeers = cfg.NumGraphSyncPeers
+	}
+	if cfg.HistoricalSyncInterval > 0 {
+		conf.HistoricalSyncInterval = cfg.HistoricalSyncInterval
+	}
+	if cfg.IgnoreHistoricalFilters {
+		conf.IgnoreHistoricalGossipFilters = cfg.IgnoreHistoricalFilters
+	}
+	if cfg.RejectHTLC {
+		conf.RejectHTLC = cfg.RejectHTLC
+	}
+	if cfg.StaggerInitialReconnect {
+		conf.StaggerInitialReconnect = cfg.StaggerInitialReconnect
+	}
+	if cfg.MaxOutgoingCltvExpiry > 0 {
+		conf.MaxOutgoingCltvExpiry = cfg.MaxOutgoingCltvExpiry
+	}
+
 	switch cfg.Network {
 	case &chaincfg.MainNetParams:
 		conf.Flokicoin.MainNet = true
