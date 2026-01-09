@@ -32,25 +32,58 @@ func CopyText(text string) (Method, error) {
 		return MethodUnsupported, errors.New("empty text")
 	}
 
-	// 1) Try OSC 52 (terminal-mediated clipboard; no installs).
-	if canTryOSC52(os.Stdout, text) {
-		if err := writeOSC52(os.Stdout, text); err == nil {
-			return MethodOSC52, nil
+	// Helper wrappers to match signatures
+	tryOSC52 := func() error {
+		if canTryOSC52(os.Stdout, text) {
+			return writeOSC52(os.Stdout, text)
 		}
-		// If it fails, continue to next methods.
+		return errors.New("cannot try OSC 52")
 	}
 
-	// 2) Try Go clipboard library (works well on Windows/macOS; Linux depends on environment).
-	if err := clipboard.WriteAll(text); err == nil {
-		return MethodAtotto, nil
+	tryAtotto := func() error {
+		return clipboard.WriteAll(text)
 	}
 
-	// 3) Try built-in OS commands (no extra installs in typical environments).
-	if err := tryOSCommandClipboard(text); err == nil {
-		return MethodOSCommand, nil
+	tryOSCommand := func() error {
+		return tryOSCommandClipboard(text)
 	}
 
-	return MethodUnsupported, fmt.Errorf("could not copy to clipboard via osc52/go-lib/os-command; fallback: show text for manual copy")
+	// Strategy pattern based on OS
+	var strategies []struct {
+		method Method
+		fn     func() error
+	}
+
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		// On macOS/Windows, native clipboard is reliable and preferred locally.
+		strategies = []struct {
+			method Method
+			fn     func() error
+		}{
+			{MethodAtotto, tryAtotto},
+			{MethodOSCommand, tryOSCommand},
+			{MethodOSC52, tryOSC52},
+		}
+	} else {
+		// On Linux/Unix, prioritizing OSC 52 is safer for SSH/Headless scenarios
+		// to avoid breaking existing workflows dependent on it.
+		strategies = []struct {
+			method Method
+			fn     func() error
+		}{
+			{MethodOSC52, tryOSC52},
+			{MethodAtotto, tryAtotto},
+			{MethodOSCommand, tryOSCommand},
+		}
+	}
+
+	for _, s := range strategies {
+		if err := s.fn(); err == nil {
+			return s.method, nil
+		}
+	}
+
+	return MethodUnsupported, fmt.Errorf("could not copy using any method (%v)", strategies)
 }
 
 func canTryOSC52(w io.Writer, text string) bool {
