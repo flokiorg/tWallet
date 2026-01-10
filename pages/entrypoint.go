@@ -28,7 +28,7 @@ func (r *Router) Go(p Page) {
 	case WALLET:
 		layout = root.NewLayout(r.load, wallet.NewPage(r.load))
 	case LOCK:
-		layout = root.NewLayout(r.load, unlock.NewPage(r.load, false))
+		layout = root.NewLayout(r.load, unlock.NewPage(r.load, false, false))
 	case ONBOARD:
 		layout = root.NewLayout(r.load, onboard.NewPage(r.load))
 	case CHANGE:
@@ -54,7 +54,7 @@ func NewEntrypoint(l *load.Load) tview.Primitive {
 
 	switch exists {
 	case true:
-		page = unlock.NewPage(l, true)
+		page = unlock.NewPage(l, true, true)
 
 	default:
 		page = onboard.NewPage(l)

@@ -26,15 +26,17 @@ const (
 
 type Unlock struct {
 	*tview.Flex
-	load *load.Load
-	nav  *load.Navigator
+	load            *load.Load
+	nav             *load.Navigator
+	allowAutoUnlock bool
 }
 
-func NewPage(l *load.Load, showForm bool) *Unlock {
+func NewPage(l *load.Load, showForm bool, allowAutoUnlock bool) *Unlock {
 	p := &Unlock{
-		Flex: tview.NewFlex(),
-		load: l,
-		nav:  l.Nav,
+		Flex:            tview.NewFlex(),
+		load:            l,
+		nav:             l.Nav,
+		allowAutoUnlock: allowAutoUnlock,
 	}
 
 	netColor := shared.NetworkColor(*l.AppConfig.Network)
@@ -98,23 +100,31 @@ func (p *Unlock) showUnlockForm() {
 
 	form := tview.NewForm()
 	form.SetBorderPadding(1, 1, 2, 3).SetBackgroundColor(tcell.ColorDefault)
-	form.AddPasswordField("Lock passphrase:", p.load.AppConfig.DefaultPassword, 0, '*', nil)
 
-	form.AddButton("Unlock", func() {
+	isAutoUnlocking := p.allowAutoUnlock && p.load.AppConfig.AutoUnlock && p.load.AppConfig.DefaultPassword != ""
 
-		unlockButton := form.GetButton(0)
-		passInput := form.GetFormItem(0).(*tview.InputField)
-		pass := passInput.GetText()
-
-		p.load.Notif.CancelToast()
-		p.load.Notif.ShowToast("🔒 unlocking...")
-
+	if isAutoUnlocking {
 		info.SetText(unlockingMessage)
-		unlockButton.SetLabel("Loading...")
-		unlockButton.SetDisabled(true)
+		p.load.Logger.Info().Msg("Auto-unlocking wallet...")
+		go p.handleUnlock(p.load.AppConfig.DefaultPassword, nil, nil, nil)
+	} else {
+		form.AddPasswordField("Lock passphrase:", p.load.AppConfig.DefaultPassword, 0, '*', nil)
+		form.AddButton("Unlock", func() {
 
-		go p.handleUnlock(pass, passInput, info, unlockButton)
-	})
+			unlockButton := form.GetButton(0)
+			passInput := form.GetFormItem(0).(*tview.InputField)
+			pass := passInput.GetText()
+
+			p.load.Notif.CancelToast()
+			p.load.Notif.ShowToast("🔒 unlocking...")
+
+			info.SetText(unlockingMessage)
+			unlockButton.SetLabel("Loading...")
+			unlockButton.SetDisabled(true)
+
+			go p.handleUnlock(pass, passInput, info, unlockButton)
+		})
+	}
 
 	view := tview.NewFlex().
 		SetDirection(tview.FlexRow).
@@ -135,11 +145,17 @@ func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tv
 	if err != nil {
 		p.load.QueueUpdateDraw(func() {
 			p.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
-			passInput.SetText(p.load.AppConfig.DefaultPassword)
-			info.SetText(unlockInstructions)
-			unlockButton.SetLabel("Unlock")
-			unlockButton.SetDisabled(false)
-			p.load.Application.SetFocus(passInput)
+			if passInput != nil {
+				passInput.SetText(p.load.AppConfig.DefaultPassword)
+				info.SetText(unlockInstructions)
+				unlockButton.SetLabel("Unlock")
+				unlockButton.SetDisabled(false)
+				p.load.Application.SetFocus(passInput)
+			} else {
+				// Auto-unlock failed, switch to manual mode
+				p.allowAutoUnlock = false
+				p.showUnlockForm()
+			}
 		})
 		return
 	}
@@ -155,11 +171,17 @@ func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tv
 		case u, ok := <-sub:
 			if !ok || u == nil {
 				p.load.QueueUpdateDraw(func() {
-					info.SetText(unlockInstructions)
-					unlockButton.SetLabel("Unlock")
-					unlockButton.SetDisabled(false)
 					p.load.Notif.ShowToast("🔒 Unlock failed. Try again.")
-					p.load.Application.SetFocus(passInput)
+					if passInput != nil {
+						info.SetText(unlockInstructions)
+						unlockButton.SetLabel("Unlock")
+						unlockButton.SetDisabled(false)
+						p.load.Application.SetFocus(passInput)
+					} else {
+						// Auto-unlock failed, switch to manual mode
+						p.allowAutoUnlock = false
+						p.showUnlockForm()
+					}
 				})
 				return
 			}
@@ -170,19 +192,27 @@ func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tv
 					if event.Err != nil {
 						p.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", event.Err.Error()), time.Second*30)
 					}
-					info.SetText(unlockInstructions)
-					unlockButton.SetLabel("Unlock")
-					unlockButton.SetDisabled(false)
-					p.load.Application.SetFocus(passInput)
+					if passInput != nil {
+						info.SetText(unlockInstructions)
+						unlockButton.SetLabel("Unlock")
+						unlockButton.SetDisabled(false)
+						p.load.Application.SetFocus(passInput)
+					} else {
+						// Auto-unlock failed, switch to manual mode
+						p.allowAutoUnlock = false
+						p.showUnlockForm()
+					}
 				})
 				return
 
 			case flnd.StatusReady, flnd.StatusSyncing, flnd.StatusUnlocked:
 				p.load.QueueUpdateDraw(func() {
 					p.load.Notif.ShowToastWithTimeout("🔓 Unlocked", time.Second*1)
-					info.SetText(unlockedMessage)
-					unlockButton.SetLabel("Unlock")
-					unlockButton.SetDisabled(false)
+					if passInput != nil {
+						info.SetText(unlockedMessage)
+						unlockButton.SetLabel("Unlock")
+						unlockButton.SetDisabled(false)
+					}
 					p.load.Go(shared.WALLET)
 				})
 				return
@@ -194,10 +224,16 @@ func (p *Unlock) handleUnlock(pass string, passInput *tview.InputField, info *tv
 		case <-timer.C:
 			p.load.QueueUpdateDraw(func() {
 				p.load.Notif.ShowToast("🔒 Unlock timed out. Try again.")
-				info.SetText(unlockInstructions)
-				unlockButton.SetLabel("Unlock")
-				unlockButton.SetDisabled(false)
-				p.load.Application.SetFocus(passInput)
+				if passInput != nil {
+					info.SetText(unlockInstructions)
+					unlockButton.SetLabel("Unlock")
+					unlockButton.SetDisabled(false)
+					p.load.Application.SetFocus(passInput)
+				} else {
+					// Auto-unlock failed, switch to manual mode
+					p.allowAutoUnlock = false
+					p.showUnlockForm()
+				}
 			})
 			return
 		}
