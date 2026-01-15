@@ -97,6 +97,27 @@
 ; Helps reduce connection storms on node restart.
 ; stagger-initial-reconnect=false
 
+; --- Tor Configuration ---
+
+; Enable Tor for P2P connectivity.
+; If enabled, the node will use Tor SOCKS proxy for outgoing connections
+; and create a hidden service for incoming connections.
+; tor.active=false
+
+; The host:port that Tor's SOCKS proxy is listening on.
+; Default is localhost:9050.
+; tor.socks=localhost:9050
+
+; The DNS server as host:port that Tor will use for SRV queries.
+; Note: Must have TCP resolution enabled.
+; Default is ln.myfloki.com:53
+; tor.dns=ln.myfloki.com:53
+
+; The host:port that Tor is listening on for control connections.
+; Required for creating hidden services (onion addresses).
+; Default is localhost:9051
+; tor.control=localhost:9051
+
 ; --- Public Announcement ---
 
 ; Add an ip:port to advertise to the network for incoming connections.
@@ -176,6 +197,21 @@
 ; Default is 20000 Loki (0.00020000 FLC).
 ; minchansize=20000
 
+
+; ============================================================================
+; Protocol Options
+; ============================================================================
+
+; Allow the node to accept and lend out (zero-conf) unconfirmed channels.
+; This allows channels to be usable immediately after funding transaction broadcast,
+; but comes with trust risks.
+; protocol.option-zeroconf=false
+
+; Allow the node to accept and provide SCID aliases for private channels.
+; Useful for privacy and zero-conf channels.
+; protocol.option-scid-alias=false
+
+
 ; ============================================================================
 ; Routing & Forwarding Configuration
 ; ============================================================================
@@ -247,3 +283,27 @@
 ; Directory for watchtower state.
 ; If not specified, uses a subdirectory in walletdir.
 ; watchtower.towerdir=
+
+; ============================================================================
+; Performance & Tuning
+; ============================================================================
+
+; Time in milliseconds between each release of announcements to the network.
+; Lower values propagate gossip faster but use more bandwidth.
+; Default is 9000 (9 seconds).
+; trickledelay=9000
+
+; The polling interval between attempts to detect if an active channel has
+; become inactive due to its peer going offline.
+; Format: duration string (e.g. 1m, 30s).
+; Default is 1m.
+; chan-status-sample-interval=1m
+
+; ============================================================================
+; Invoices
+; ============================================================================
+
+; The number of blocks within which the invoice will remain in the accepted state
+; before being canceled.
+; Default is 0.
+; hodl.expiry-delta=0

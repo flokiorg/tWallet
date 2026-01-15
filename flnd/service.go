@@ -115,6 +115,23 @@ type ServiceConfig struct {
 	StaggerInitialReconnect bool          `long:"stagger-initial-reconnect" description:"If true, will apply a randomized staggering between 0s and 30s when reconnecting to persistent peers on startup"`
 	MaxOutgoingCltvExpiry   uint32        `long:"max-cltv-expiry" description:"The maximum number of blocks funds could be locked up for when forwarding payments"`
 
+	// Protocol Options
+	ProtocolOptionZeroConf  bool `long:"protocol.option-zeroconf" description:"Allow the node to accept and lend out (zero-conf) unconfirmed channels"`
+	ProtocolOptionScidAlias bool `long:"protocol.option-scid-alias" description:"Allow the node to accept and provide SCID aliases for private channels"`
+
+	// Tor Configuration
+	TorActive  bool   `long:"tor.active" description:"Enable Tor for P2P connectivity"`
+	TorSOCKS   string `long:"tor.socks" description:"The host:port that Tor's SOCKS proxy is listening on"`
+	TorDNS     string `long:"tor.dns" description:"The DNS server as host:port that Tor will use for SRV queries - NOTE must have TCP resolution enabled"`
+	TorControl string `long:"tor.control" description:"The host:port that Tor is listening on for control connections"`
+
+	// Performance & Tuning
+	TrickleDelay             int           `long:"trickledelay" description:"Time in milliseconds between each release of announcements to the network"`
+	ChanStatusSampleInterval time.Duration `long:"chan-status-sample-interval" description:"The polling interval between attempts to detect if an active channel has become inactive due to its peer going offline"`
+
+	// Invoices
+	HodlExpiryDelta int `long:"hodl.expiry-delta" description:"The number of blocks within which the invoice will remain in the accepted state before being canceled"`
+
 	Network *chaincfg.Params
 }
 
@@ -159,6 +176,37 @@ func New(pctx context.Context, cfg *ServiceConfig) *Service {
 	conf.RestCORS = append(conf.RestCORS, cfg.RestCORS...)
 	conf.TLSAutoRefresh = cfg.TLSAutoRefresh
 	conf.ResetWalletTransactions = cfg.ResetWalletTransactions
+
+	// Protocol Options
+	conf.ProtocolOptions.OptionZeroConf = cfg.ProtocolOptionZeroConf
+	conf.ProtocolOptions.OptionScidAlias = cfg.ProtocolOptionScidAlias
+
+	// Tor Configuration
+	if cfg.TorActive {
+		conf.Tor.Active = true
+		if cfg.TorSOCKS != "" {
+			conf.Tor.SOCKS = cfg.TorSOCKS
+		}
+		if cfg.TorDNS != "" {
+			conf.Tor.DNS = cfg.TorDNS
+		}
+		if cfg.TorControl != "" {
+			conf.Tor.Control = cfg.TorControl
+		}
+	}
+
+	// Performance & Tuning
+	if cfg.TrickleDelay > 0 {
+		conf.TrickleDelay = cfg.TrickleDelay
+	}
+	if cfg.ChanStatusSampleInterval > 0 {
+		conf.ChanStatusSampleInterval = cfg.ChanStatusSampleInterval
+	}
+
+	// Invoices
+	if cfg.HodlExpiryDelta > 0 {
+		conf.Invoices.HoldExpiryDelta = uint32(cfg.HodlExpiryDelta)
+	}
 
 	// Network & Peers
 	conf.NeutrinoMode.AddPeers = append(conf.NeutrinoMode.AddPeers, cfg.AddPeers...)
