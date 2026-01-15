@@ -14,6 +14,8 @@ type AppConfig struct {
 	AutoUnlock      bool   `long:"autounlock" description:"Automatically unlock the wallet on startup using defaultpassword (WARNING: Use with caution)"`
 	Version         bool   `short:"v" description:"Print version"`
 
+	AutoRefreshInterval int `long:"autorefreshinterval" description:"Interval in seconds to automatically refresh the TUI (0 to disable)" default:"300"`
+
 	UsedAddressType   lnrpc.AddressType
 	UnusedAddressType lnrpc.AddressType
 }

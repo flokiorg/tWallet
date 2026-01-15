@@ -6,6 +6,7 @@ package tui
 
 import (
 	"os"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -61,8 +62,22 @@ func NewApp(cfg *config.AppConfig) *App {
 	app.SetInputCapture(app.captureStartupKeys)
 
 	app.startBoot()
+	app.startAutoRefreshLoop()
 
 	return app
+}
+
+func (app *App) startAutoRefreshLoop() {
+	if app.cfg.AutoRefreshInterval <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(time.Duration(app.cfg.AutoRefreshInterval) * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			app.Draw()
+		}
+	}()
 }
 
 func (app *App) Close() {
