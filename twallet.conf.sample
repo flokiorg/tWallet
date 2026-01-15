@@ -199,20 +199,6 @@
 
 
 ; ============================================================================
-; Protocol Options
-; ============================================================================
-
-; Allow the node to accept and lend out (zero-conf) unconfirmed channels.
-; This allows channels to be usable immediately after funding transaction broadcast,
-; but comes with trust risks.
-; protocol.option-zeroconf=false
-
-; Allow the node to accept and provide SCID aliases for private channels.
-; Useful for privacy and zero-conf channels.
-; protocol.option-scid-alias=false
-
-
-; ============================================================================
 ; Routing & Forwarding Configuration
 ; ============================================================================
 
@@ -283,6 +269,22 @@
 ; Directory for watchtower state.
 ; If not specified, uses a subdirectory in walletdir.
 ; watchtower.towerdir=
+
+
+
+; ============================================================================
+; Protocol Options
+; ============================================================================
+
+; Allow the node to accept and lend out (zero-conf) unconfirmed channels.
+; This allows channels to be usable immediately after funding transaction broadcast,
+; but comes with trust risks.
+; protocol.option-zeroconf=true
+
+; Allow the node to accept and provide SCID aliases for private channels.
+; Useful for privacy and zero-conf channels.
+; protocol.option-scid-alias=true
+
 
 ; ============================================================================
 ; Performance & Tuning
