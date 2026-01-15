@@ -116,8 +116,8 @@ type ServiceConfig struct {
 	MaxOutgoingCltvExpiry   uint32        `long:"max-cltv-expiry" description:"The maximum number of blocks funds could be locked up for when forwarding payments"`
 
 	// Protocol Options
-	ProtocolOptionZeroConf  bool `long:"protocol.option-zeroconf" description:"Allow the node to accept and lend out (zero-conf) unconfirmed channels" default:"true"`
-	ProtocolOptionScidAlias bool `long:"protocol.option-scid-alias" description:"Allow the node to accept and provide SCID aliases for private channels" default:"true"`
+	ProtocolOptionZeroConf  bool `long:"protocol.option-zeroconf" description:"Allow the node to accept and lend out (zero-conf) unconfirmed channels"`
+	ProtocolOptionScidAlias bool `long:"protocol.option-scid-alias" description:"Allow the node to accept and provide SCID aliases for private channels"`
 
 	// Tor Configuration
 	TorActive  bool   `long:"tor.active" description:"Enable Tor for P2P connectivity"`

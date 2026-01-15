@@ -124,6 +124,13 @@ func main() {
 		opts.TLSAutoRefresh = true
 	}
 
+	if opt := parser.FindOptionByLongName("protocol.option-zeroconf"); !optionDefined(opt) {
+		opts.ProtocolOptionZeroConf = true
+	}
+	if opt := parser.FindOptionByLongName("protocol.option-scid-alias"); !optionDefined(opt) {
+		opts.ProtocolOptionScidAlias = true
+	}
+
 	usedType, unusedType, err := GetAddressTypesFromName(opts.AddressType)
 	if err != nil {
 		showHelpAndExit("invalid address type", err)
