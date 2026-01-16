@@ -64,6 +64,7 @@ func (w *Wallet) showLightningConfigView() {
 	formNode := createBaseForm()
 	addField(formNode, "Peer Address", cfg.PeerAddress)
 	addField(formNode, "Identity PubKey", cfg.PubKey)
+	addField(formNode, "Alias", cfg.Alias)
 
 	copyFunc := func() {
 		var sb strings.Builder
@@ -73,6 +74,7 @@ func (w *Wallet) showLightningConfigView() {
 		sb.WriteString("\n\n")
 		sb.WriteString(fmt.Sprintf("Peer Address: %s\n", cfg.PeerAddress))
 		sb.WriteString(fmt.Sprintf("Identity PubKey: %s\n", cfg.PubKey))
+		sb.WriteString(fmt.Sprintf("Alias: %s\n", cfg.Alias))
 
 		if err := shared.ClipboardCopy(sb.String()); err != nil {
 			w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Copy failed:[-:-:-] %v", err), 2*time.Second)

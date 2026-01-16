@@ -1121,6 +1121,7 @@ type LightningConfig struct {
 	RpcAddress  string
 	PeerAddress string
 	PubKey      string
+	Alias       string
 	MacaroonHex string
 	TLSCertHex  string
 }
@@ -1194,6 +1195,7 @@ func (c *Client) GetLightningConfig() (*LightningConfig, error) {
 		RpcAddress:  address,
 		PeerAddress: peerAddress,
 		PubKey:      info.IdentityPubkey,
+		Alias:       info.Alias,
 		MacaroonHex: c.adminMacHex,
 		TLSCertHex:  certHex,
 	}, nil
