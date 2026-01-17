@@ -11,6 +11,10 @@ import (
 	"strings"
 	"sync/atomic"
 
+	stdlog "log"
+
+	"google.golang.org/grpc/grpclog"
+
 	"github.com/rs/zerolog"
 )
 
@@ -59,6 +63,19 @@ func CreateFileLogger(logpath string, level zerolog.Level) zerolog.Logger {
 	multiWriter := zerolog.MultiLevelWriter(fileConsoleWriter)
 
 	logger := zerolog.New(multiWriter).With().Timestamp().Logger().Level(level)
+
+	// Redirect standard library generic logs to the file logger
+	stdlog.SetOutput(logFile)
+	stdlog.SetFlags(stdlog.LstdFlags | stdlog.Lmicroseconds | stdlog.Lshortfile)
+
+	// Redirect gRPC logs to the file logger as well.
+	// We need a separate logger for gRPC because it requires a specific interface.
+	// We use a simple wrapper around our zerolog logger for this purpose,
+	// or just direct the standard log to the file (which gRPC uses by default usually,
+	// but explicit SetLoggerV2 is safer if it tries to be smart).
+	// Ideally, for simplicity and safety against TUI corruption, we just pipe it to the file.
+	gLogger := grpclog.NewLoggerV2(logFile, logFile, logFile)
+	grpclog.SetLoggerV2(gLogger)
 
 	FileLogger = logger
 	loggerConfigured.Store(true)
