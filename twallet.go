@@ -28,7 +28,7 @@ var (
 	defaultNetwork           = &chaincfg.MainNetParams
 	defaultAppDataDir        = "flnd"
 	defaultConfigFilename    = "twallet.conf"
-	defaultMainnetFeeURL     = "https://flokichain.info/api/v1/fees/recommended"
+	defaultMainnetFeeURL     = "https://lokichain.info/api/v1/fees/recommended"
 
 	defaultTransactionDisplayLimit = 121
 

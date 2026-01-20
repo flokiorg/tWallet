@@ -51,7 +51,7 @@
 ; The URL below is only an example — you can replace it with your own fee provider.
 ; Expected response format:
 ; {"fastestFee":1,"halfHourFee":1,"hourFee":1,"economyFee":0,"minimumFee":0}
-; feeurl=https://flokichain.info/api/v1/fees/recommended
+; feeurl=https://lokichain.info/api/v1/fees/recommended
 
 ; ============================================================================
 ; Node Identity
