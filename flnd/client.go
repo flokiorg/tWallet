@@ -74,6 +74,7 @@ type Client struct {
 type FetchTransactionsOptions struct {
 	ForceRescan bool
 	IgnoreLimit bool
+	OnProgress  func(count int)
 }
 
 const (
@@ -986,6 +987,9 @@ func (c *Client) FetchTransactionsWithOptions(opts FetchTransactionsOptions) ([]
 		}
 
 		collected = append(collected, resp.Transactions...)
+		if opts.OnProgress != nil {
+			opts.OnProgress(len(existing) + len(collected))
+		}
 
 		// Advance cursor using server-driven index to avoid gaps/dups.
 		cursor = uint64(resp.LastIndex) + 1
@@ -1001,7 +1005,12 @@ func (c *Client) FetchTransactionsWithOptions(opts FetchTransactionsOptions) ([]
 	}
 
 	// Merge existing cache + newly collected.
-	allTxs := make([]*lnrpc.Transaction, 0, len(existing)+len(collected))
+	currentTotal := len(existing) + len(collected)
+	if opts.OnProgress != nil {
+		opts.OnProgress(currentTotal)
+	}
+
+	allTxs := make([]*lnrpc.Transaction, 0, currentTotal)
 	if len(existing) > 0 {
 		allTxs = append(allTxs, existing...)
 	}

@@ -23,7 +23,12 @@ type txRetryHandle struct {
 
 func (w *Wallet) fetchTransactionsRows() [][]string {
 	tipHeight := w.load.Cache.GetTipHeight()
-	txs, err := w.load.Wallet.FetchTransactions()
+	opts := flnd.FetchTransactionsOptions{
+		OnProgress: func(count int) {
+			w.showPlaceholder(fmt.Sprintf("Loading transactions... (%d)", count))
+		},
+	}
+	txs, err := w.load.Wallet.FetchTransactionsWithOptions(opts)
 	if err != nil {
 		w.load.Notif.ShowToastWithTimeout(fmt.Sprintf("[red:-:-]Error:[-:-:-] %s", err.Error()), time.Second*30)
 		return nil
