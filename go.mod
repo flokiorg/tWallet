@@ -1,8 +1,6 @@
 module github.com/flokiorg/twallet
 
-go 1.23.6
-
-toolchain go1.24.3
+go 1.24.9
 
 require (
 	github.com/atotto/clipboard v0.1.4
