@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 
 	stdlog "log"
 
@@ -49,6 +50,13 @@ func CreateFileLogger(logpath string, level zerolog.Level) zerolog.Logger {
 	logFile, err := os.OpenFile(logpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		panic(fmt.Errorf("failed to open log file: %w", err))
+	}
+
+	// Redirect stderr to a crash log file so unhandled panics are persisted.
+	crashLogPath := filepath.Join(dir, "crash.log")
+	crashFile, err := os.OpenFile(crashLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		syscall.Dup2(int(crashFile.Fd()), int(os.Stderr.Fd()))
 	}
 
 	fileConsoleWriter := zerolog.ConsoleWriter{
