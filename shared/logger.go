@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"syscall"
 
 	stdlog "log"
 
 	"google.golang.org/grpc/grpclog"
 
+	"github.com/flokiorg/twallet/shared/crashlog"
 	"github.com/rs/zerolog"
 )
 
@@ -56,7 +56,7 @@ func CreateFileLogger(logpath string, level zerolog.Level) zerolog.Logger {
 	crashLogPath := filepath.Join(dir, "crash.log")
 	crashFile, err := os.OpenFile(crashLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err == nil {
-		syscall.Dup2(int(crashFile.Fd()), int(os.Stderr.Fd()))
+		crashlog.RedirectStderr(crashFile)
 	}
 
 	fileConsoleWriter := zerolog.ConsoleWriter{
