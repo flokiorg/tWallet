@@ -94,7 +94,7 @@ type ServiceConfig struct {
 
 	// Public Node Configuration
 	ExternalIPs   []string `long:"externalip" description:"Add an ip:port to advertise to the network for incoming connections"`
-	ExternalHosts []string `long:"externalhosts" description:"Add a hostname:port that should be periodically resolved to announce IPs for. If port is not specified, the default (9735) will be used"`
+	ExternalHosts []string `long:"externalhosts" description:"Add a hostname:port that should be periodically resolved to announce IPs for. If port is not specified, the default (5521) will be used"`
 	DisableListen bool     `long:"nolisten" description:"Disable listening for incoming peer connections"`
 	NAT           bool     `long:"nat" description:"Toggle NAT traversal support (using either UPnP or NAT-PMP) to automatically advertise your external IP address to the network"`
 
