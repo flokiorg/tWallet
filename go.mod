@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/atotto/clipboard v0.1.4
-	github.com/flokiorg/flnd v0.1.20-beta
+	github.com/flokiorg/flnd v0.1.21-beta
 	github.com/flokiorg/go-flokicoin v0.25.13-alpha
 	github.com/flokiorg/walletd v0.1.8-beta
 	github.com/gdamore/tcell/v2 v2.13.4
