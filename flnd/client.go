@@ -749,7 +749,7 @@ func (c *Client) PublishTransaction(tx *chainutil.Tx) error {
 	}
 
 	if resp.PublishError != "" {
-		return fmt.Errorf(resp.PublishError)
+		return errors.New(resp.PublishError)
 	}
 
 	return nil
