@@ -1,8 +1,11 @@
+//go:build integration
+
 package flnd
 
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/flokiorg/flnd"
@@ -57,18 +60,16 @@ func TestDaemonConnection(t *testing.T) {
 func createTestTempDir(t *testing.T) string {
 	t.Helper()
 
-	// tempDir, err := os.MkdirTemp("", "test-temp-*")
-	// if err != nil {
-	// 	t.Fatalf("failed to create temp dir: %v", err)
-	// }
+	tempDir, err := os.MkdirTemp("", "test-temp-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
 
-	tempDir := "/u/flzpace/xgit/repos/flokiorg/twallet/test/t0"
-
-	// t.Cleanup(func() {
-	// 	if err := os.RemoveAll(tempDir); err != nil {
-	// 		t.Fatalf("Failed to remove temp dir: %v", err)
-	// 	}
-	// })
+	t.Cleanup(func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	})
 
 	return tempDir
 }

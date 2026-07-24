@@ -1,3 +1,5 @@
+//go:build integration
+
 package flnd
 
 import (
@@ -9,9 +11,14 @@ import (
 	"github.com/flokiorg/go-flokicoin/chaincfg"
 )
 
-func TestMain(t *testing.T) {
+// TestManualFlndTestnetLaunch is a manual smoke test that starts a real flnd
+// daemon connected to a live testnet peer. It is not named TestMain despite
+// appearances in a prior revision -- that name collides with the special
+// TestMain(*testing.M) hook, but this function's signature never actually
+// matched it, so it just ran as a regular (very heavy) test.
+func TestManualFlndTestnetLaunch(t *testing.T) {
 
-	walletdir := "/u/flzpace/xgit/repos/flokiorg/twallet/test/t0"
+	walletdir := createTestTempDir(t)
 	network := &chaincfg.TestNet3Params
 
 	interceptor, err := signal.Intercept()
