@@ -54,5 +54,5 @@ jobs:
           file: Dockerfile.release
           push: true
           tags: |
-            ghcr.io/flokiorg/tWallet:edge
-            ghcr.io/flokiorg/tWallet:${{ github.sha }}
+            ghcr.io/flokiorg/twallet:edge
+            ghcr.io/flokiorg/twallet:${{ github.sha }}
