@@ -35,3 +35,9 @@ go.work.sum
 makefile
 .agents/
 skills-lock.json
+
+# Local agent/tooling directories, not part of the project.
+.claude/
+
+# GoReleaser build output.
+dist/
