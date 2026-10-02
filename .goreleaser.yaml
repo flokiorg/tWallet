@@ -71,7 +71,7 @@ dockers:
     use: buildx
     goarch: amd64
     image_templates:
-      - "ghcr.io/flokiorg/tWallet:{{ .Version }}-amd64"
+      - "ghcr.io/flokiorg/twallet:{{ .Version }}-amd64"
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
@@ -86,7 +86,7 @@ dockers:
     use: buildx
     goarch: arm64
     image_templates:
-      - "ghcr.io/flokiorg/tWallet:{{ .Version }}-arm64"
+      - "ghcr.io/flokiorg/twallet:{{ .Version }}-arm64"
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
@@ -96,18 +96,18 @@ dockers:
 
 
 docker_manifests:
-  - name_template: "ghcr.io/flokiorg/tWallet:{{ .Version }}"
+  - name_template: "ghcr.io/flokiorg/twallet:{{ .Version }}"
     image_templates:
-      - "ghcr.io/flokiorg/tWallet:{{ .Version }}-amd64"
-      - "ghcr.io/flokiorg/tWallet:{{ .Version }}-arm64"
+      - "ghcr.io/flokiorg/twallet:{{ .Version }}-amd64"
+      - "ghcr.io/flokiorg/twallet:{{ .Version }}-arm64"
 
   # skip_push: auto leaves :latest alone for a pre-release, so pulling
-  # ghcr.io/flokiorg/tWallet can never resolve to a pre-release build.
-  - name_template: "ghcr.io/flokiorg/tWallet:latest"
+  # ghcr.io/flokiorg/twallet can never resolve to a pre-release build.
+  - name_template: "ghcr.io/flokiorg/twallet:latest"
     skip_push: auto
     image_templates:
-      - "ghcr.io/flokiorg/tWallet:{{ .Version }}-amd64"
-      - "ghcr.io/flokiorg/tWallet:{{ .Version }}-arm64"
+      - "ghcr.io/flokiorg/twallet:{{ .Version }}-amd64"
+      - "ghcr.io/flokiorg/twallet:{{ .Version }}-arm64"
 
 checksum:
   name_template: checksums.txt
