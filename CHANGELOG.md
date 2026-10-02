@@ -4,6 +4,24 @@
 
 ### Changed
 
+- Updated every flokiorg dependency to its current release: `flnd` v0.2.3,
+  `go-flokicoin` v0.26.3, `walletd` v0.2.2 and `flokicoin-neutrino` v0.17.2.
+- Built with Go 1.26.8, up from 1.26.5, which closes four reachable stdlib
+  vulnerabilities (GO-2026-6218 `net/url`, GO-2026-6090 `crypto/tls`,
+  GO-2026-5972 `encoding/asn1`, GO-2026-5026 `net/http`).
+- The release now publishes a multi-arch container image to
+  `ghcr.io/flokiorg/tWallet`, and every push to `main` publishes an `:edge`
+  image.
+
+### Known issue
+
+- `GO-2026-6443`, a server panic in `google.golang.org/grpc` via a missing
+  `:authority` or `Host` header, has no stable fix -- upstream's patch exists
+  only in an unreleased v1.85.0 development build. Accepted and monitored
+  rather than pinning a pre-release dependency.
+
+### Changed
+
 - Built with Go 1.26.5. (#3)
 
 ## [1.0.14-beta]
