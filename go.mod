@@ -4,7 +4,7 @@ go 1.26.8
 
 require (
 	github.com/atotto/clipboard v0.1.4
-	github.com/flokiorg/flnd v0.2.3
+	github.com/flokiorg/flnd v0.2.4
 	github.com/flokiorg/go-flokicoin v0.26.3
 	github.com/flokiorg/walletd v0.2.2
 	github.com/gdamore/tcell/v2 v2.13.4
@@ -14,7 +14,7 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
-	google.golang.org/grpc v1.84.0
+	google.golang.org/grpc v1.83.2
 )
 
 require (
