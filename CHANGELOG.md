@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.16]
+
+### Fixed
+
+- **GO-2026-6443**, a remotely triggerable server panic in
+  `google.golang.org/grpc` (missing `:authority`/`Host` header), was reachable
+  here and shipped in 1.0.15. grpc is pinned to **v1.83.2**, which the
+  advisory does not cover, and `govulncheck ./...` now reports no reachable
+  findings.
+
+  This could not be fixed when the other repos were, because MVS lets a
+  dependent only raise a requirement, never lower it, and flnd 0.2.3 required
+  the affected v1.84.0. It needed flnd 0.2.4 to carry the pin first.
+
+  Earlier notes in this org called the finding unfixable, on the grounds that
+  the only fix was an unreleased v1.85.0 development build. That misread
+  govulncheck's `Fixed in:` line, which names the next fix above the version
+  in use. The affected ranges are `[0, 1.82.2)`, `[1.83.0, 1.83.2)` and
+  `[1.84.0-dev, 1.85.0-dev...)`.
+
+### Changed
+
+- `flnd` 0.2.3 -> **0.2.4**.
+
 ## [1.0.15]
 
 ### Changed
