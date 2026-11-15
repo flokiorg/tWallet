@@ -1,0 +1,11 @@
+# Image used by the release workflow. Unlike any development Dockerfile here,
+# this one does not compile: GoReleaser has already cross-compiled the binary
+# and runs `docker build` with dist/ as the context, so the binary is copied in.
+# That keeps the published image and the published archives the same build.
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates
+
+COPY twallet /bin/twallet
+
+ENTRYPOINT ["/bin/twallet"]

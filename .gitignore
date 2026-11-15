@@ -1,0 +1,43 @@
+# ==================
+# Build & Executables
+# ==================
+twallet
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# ==================
+# Testing & Coverage
+# ==================
+*.test
+*.out
+cover.out
+test/
+
+# ==================
+# Go Workspaces
+# ==================
+go.work
+go.work.sum
+
+# ==================
+# IDE / OS Files
+# ==================
+.vscode/
+.idea/
+.DS_Store
+
+# ==================
+# Tooling & Scripts
+# ==================
+makefile
+.agents/
+skills-lock.json
+
+# Local agent/tooling directories, not part of the project.
+.claude/
+
+# GoReleaser build output.
+dist/
